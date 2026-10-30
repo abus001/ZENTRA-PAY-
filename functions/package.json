@@ -1,7 +1,7 @@
 
 {
   "name": "zentra-pay-functions",
-  "description": "Secure backend for ZENTRA PAY",
+  "description": "ZENTRA PAY secure backend",
   "version": "1.0.0",
   "private": true,
   "main": "index.js",
