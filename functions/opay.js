@@ -1,14 +1,14 @@
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
-const { initializeApp } = require("firebase-admin/app");
+
 const {
   getFirestore,
   FieldValue
 } = require("firebase-admin/firestore");
 const crypto = require("crypto");
 
-initializeApp();
+
 
 const db = getFirestore();
 
