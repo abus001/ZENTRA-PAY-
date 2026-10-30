@@ -5,504 +5,134 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#080808">
-
-  <title>ZENTRA PAY | Digital Payments</title>
-
+  <title>ZENTRA PAY</title>
   <link rel="stylesheet" href="style.css">
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
-
 <body>
-
-  <!-- SPLASH SCREEN -->
-  <div id="splashScreen" class="splash-screen">
-    <div class="splash-logo">Z</div>
-    <h1>ZENTRA <span>PAY</span></h1>
-    <p>PAY SMART. LIVE BETTER.</p>
-    <div class="loader"></div>
-  </div>
-
-  <!-- MAIN APP -->
-  <div id="app" class="app-container">
-
-    <!-- HEADER -->
-    <header class="top-header">
-
-      <div class="brand">
-        <div class="brand-icon">Z</div>
-        <div>
-          <h2>ZENTRA<span>PAY</span></h2>
-          <small>Digital Payment Platform</small>
-        </div>
+  <div class="app">
+    <header class="brand">
+      <div class="brand-mark">Z</div>
+      <div>
+        <h1>ZENTRA <span>PAY</span></h1>
+        <small>SMART PAYMENT PLATFORM</small>
       </div>
-
-      <div class="header-actions">
-        <button class="icon-btn" onclick="showNotifications()">
-          <i class="fa-regular fa-bell"></i>
-        </button>
-
-        <button class="profile-btn" onclick="navigate('profile')">
-          <i class="fa-regular fa-user"></i>
-        </button>
-      </div>
-
     </header>
 
-    <!-- MAIN CONTENT -->
-    <main class="main-content">
-
-      <!-- HOME PAGE -->
-      <section id="homePage" class="page active">
-
-        <div class="welcome-section">
-          <div>
-            <p>Welcome back,</p>
-            <h2 id="userName">ZENTRA USER</h2>
-          </div>
-
-          <span class="verified">
-            <i class="fa-solid fa-circle-check"></i>
-            Verified
-          </span>
+    <main>
+      <section id="authScreen" class="auth-card">
+        <div class="welcome">
+          <span class="eyebrow">WELCOME TO ZENTRA PAY</span>
+          <h2 id="authHeading">Create your account</h2>
+          <p id="authDescription">Register to access your account securely.</p>
         </div>
 
-        <!-- WALLET CARD -->
+        <div class="switcher">
+          <button class="switch active" id="registerTab" type="button">Register</button>
+          <button class="switch" id="loginTab" type="button">Login</button>
+        </div>
+
+        <div class="method-switch">
+          <button class="method active" id="emailMethod" type="button">Email</button>
+          <button class="method" id="phoneMethod" type="button">Phone number</button>
+        </div>
+
+        <form id="emailForm">
+          <div id="nameField" class="field">
+            <label for="fullName">Full name</label>
+            <input id="fullName" type="text" placeholder="Enter your full name" autocomplete="name">
+          </div>
+
+          <div class="field">
+            <label for="email">Email address</label>
+            <input id="email" type="email" placeholder="example@email.com" autocomplete="email">
+          </div>
+
+          <div class="field">
+            <label for="emailPassword">Password</label>
+            <input id="emailPassword" type="password" placeholder="At least 6 characters" autocomplete="current-password" minlength="6">
+          </div>
+
+          <div id="confirmField" class="field">
+            <label for="confirmPassword">Confirm password</label>
+            <input id="confirmPassword" type="password" placeholder="Enter password again" autocomplete="new-password">
+          </div>
+
+          <button class="primary-btn" id="emailSubmit" type="submit">Create account</button>
+          <button class="text-btn hidden" id="forgotBtn" type="button">Forgot password?</button>
+        </form>
+
+        <form id="phoneForm" class="hidden">
+          <div id="phoneNameField" class="field">
+            <label for="phoneName">Full name</label>
+            <input id="phoneName" type="text" placeholder="Enter your full name" autocomplete="name">
+          </div>
+
+          <div class="field">
+            <label for="phoneNumber">Phone number</label>
+            <input id="phoneNumber" type="tel" placeholder="+2348012345678" autocomplete="tel">
+            <small>Use international format, e.g. +2348012345678</small>
+          </div>
+
+          <div id="recaptcha-container"></div>
+
+          <button class="primary-btn" id="sendOtpBtn" type="submit">Send verification code</button>
+
+          <div id="otpArea" class="hidden">
+            <div class="field">
+              <label for="otpCode">Verification code</label>
+              <input id="otpCode" type="text" inputmode="numeric" placeholder="Enter 6-digit code" maxlength="6">
+            </div>
+            <button class="primary-btn" id="verifyOtpBtn" type="button">Verify and continue</button>
+          </div>
+        </form>
+
+        <p id="message" class="message" aria-live="polite"></p>
+        <p class="secure-note">🔒 Your account is protected by Firebase Authentication.</p>
+      </section>
+
+      <section id="dashboard" class="hidden">
+        <div class="dash-top">
+          <div>
+            <small>WELCOME BACK</small>
+            <h2 id="userName">User</h2>
+          </div>
+          <button id="logoutBtn" class="logout-btn" type="button">Log out</button>
+        </div>
+
         <div class="wallet-card">
-
-          <div class="wallet-top">
-            <span>AVAILABLE BALANCE</span>
-
-            <button onclick="toggleBalance()" id="balanceToggle">
-              <i class="fa-regular fa-eye"></i>
-            </button>
-          </div>
-
-          <h1 id="walletBalance">₦0.00</h1>
-
-          <div class="wallet-bottom">
-            <span>ZENTRA WALLET</span>
-            <span><i class="fa-solid fa-shield-halved"></i> SECURE</span>
-          </div>
-
-          <div class="zebra-decoration"></div>
-
+          <span>WALLET BALANCE</span>
+          <h2>₦ <span id="walletBalance">0.00</span></h2>
+          <small>Wallet funding will be enabled after payment integration.</small>
         </div>
 
-        <!-- WALLET ACTIONS -->
-        <div class="wallet-actions">
-
-          <button onclick="navigate('fund')">
-            <span class="action-icon">
-              <i class="fa-solid fa-plus"></i>
-            </span>
-            <small>Fund Wallet</small>
-          </button>
-
-          <button onclick="navigate('history')">
-            <span class="action-icon">
-              <i class="fa-solid fa-clock-rotate-left"></i>
-            </span>
-            <small>History</small>
-          </button>
-
-          <button onclick="navigate('profile')">
-            <span class="action-icon">
-              <i class="fa-solid fa-user"></i>
-            </span>
-            <small>Account</small>
-          </button>
-
+        <h3>Services</h3>
+        <div class="services">
+          <div class="service"><span>📱</span><b>Airtime</b></div>
+          <div class="service"><span>🌐</span><b>Data</b></div>
+          <div class="service"><span>💡</span><b>Electricity</b></div>
+          <div class="service"><span>📺</span><b>Pay TV</b></div>
+          <div class="service"><span>🎓</span><b>WAEC PIN</b></div>
+          <div class="service"><span>📝</span><b>NECO PIN</b></div>
+          <div class="service"><span>📚</span><b>JAMB PIN</b></div>
+          <div class="service"><span>📡</span><b>Internet</b></div>
+          <div class="service"><span>✉️</span><b>Bulk SMS</b></div>
+          <div class="service"><span>🎁</span><b>Gift Cards</b></div>
+          <div class="service"><span>🎟️</span><b>Vouchers</b></div>
+          <div class="service"><span>🏫</span><b>School Fees</b></div>
         </div>
 
-        <!-- SERVICES -->
-        <div class="section-heading">
-          <div>
-            <h3>Our Services</h3>
-            <p>Everything you need in one place</p>
-          </div>
-          <span class="service-label">12 SERVICES</span>
+        <div class="account-info">
+          <h3>Account information</h3>
+          <p id="accountEmail"></p>
+          <p id="accountPhone"></p>
+          <p class="notice">Services and wallet payments are not active until their approved provider APIs and secure backend are connected.</p>
         </div>
-
-        <div class="services-grid">
-
-          <button class="service-card" onclick="openService('airtime')">
-            <div class="service-icon">
-              <i class="fa-solid fa-mobile-screen-button"></i>
-            </div>
-            <strong>Airtime</strong>
-            <small>Buy Airtime</small>
-          </button>
-
-          <button class="service-card" onclick="openService('data')">
-            <div class="service-icon">
-              <i class="fa-solid fa-wifi"></i>
-            </div>
-            <strong>Data</strong>
-            <small>Buy Data</small>
-          </button>
-
-          <button class="service-card" onclick="openService('electricity')">
-            <div class="service-icon">
-              <i class="fa-solid fa-bolt"></i>
-            </div>
-            <strong>Electricity</strong>
-            <small>Pay Bills</small>
-          </button>
-
-          <button class="service-card" onclick="openService('tv')">
-            <div class="service-icon">
-              <i class="fa-solid fa-tv"></i>
-            </div>
-            <strong>Pay TV</strong>
-            <small>Subscription</small>
-          </button>
-
-          <button class="service-card" onclick="openService('waec')">
-            <div class="service-icon">
-              <i class="fa-solid fa-graduation-cap"></i>
-            </div>
-            <strong>WAEC PIN</strong>
-            <small>Buy PIN</small>
-          </button>
-
-          <button class="service-card" onclick="openService('neco')">
-            <div class="service-icon">
-              <i class="fa-solid fa-book-open"></i>
-            </div>
-            <strong>NECO PIN</strong>
-            <small>Buy PIN</small>
-          </button>
-
-          <button class="service-card" onclick="openService('jamb')">
-            <div class="service-icon">
-              <i class="fa-solid fa-school"></i>
-            </div>
-            <strong>JAMB PIN</strong>
-            <small>Registration</small>
-          </button>
-
-          <button class="service-card" onclick="openService('internet')">
-            <div class="service-icon">
-              <i class="fa-solid fa-globe"></i>
-            </div>
-            <strong>Internet</strong>
-            <small>Subscription</small>
-          </button>
-
-          <button class="service-card" onclick="openService('sms')">
-            <div class="service-icon">
-              <i class="fa-solid fa-comment-sms"></i>
-            </div>
-            <strong>Bulk SMS</strong>
-            <small>Send SMS</small>
-          </button>
-
-          <button class="service-card" onclick="openService('giftcards')">
-            <div class="service-icon">
-              <i class="fa-solid fa-gift"></i>
-            </div>
-            <strong>Gift Cards</strong>
-            <small>Digital Cards</small>
-          </button>
-
-          <button class="service-card" onclick="openService('vouchers')">
-            <div class="service-icon">
-              <i class="fa-solid fa-ticket"></i>
-            </div>
-            <strong>Vouchers</strong>
-            <small>Buy Vouchers</small>
-          </button>
-
-          <button class="service-card" onclick="openService('schoolfees')">
-            <div class="service-icon">
-              <i class="fa-solid fa-building-columns"></i>
-            </div>
-            <strong>School Fees</strong>
-            <small>Pay Fees</small>
-          </button>
-
-        </div>
-
-        <!-- RECENT TRANSACTIONS -->
-        <div class="section-heading recent-heading">
-          <div>
-            <h3>Recent Transactions</h3>
-            <p>Your latest activities</p>
-          </div>
-
-          <button class="view-all" onclick="navigate('history')">
-            View All
-          </button>
-        </div>
-
-        <div id="recentTransactions" class="transactions-list">
-          <div class="empty-state">
-            <i class="fa-solid fa-receipt"></i>
-            <p>No transactions yet</p>
-            <small>Your transactions will appear here.</small>
-          </div>
-        </div>
-
       </section>
-
-      <!-- SERVICE PAGE -->
-      <section id="servicePage" class="page">
-
-        <div class="page-heading">
-          <button class="back-btn" onclick="navigate('home')">
-            <i class="fa-solid fa-arrow-left"></i>
-          </button>
-
-          <div>
-            <h2 id="serviceTitle">Service</h2>
-            <p id="serviceDescription">Complete your payment</p>
-          </div>
-        </div>
-
-        <div class="form-card">
-
-          <div class="service-form-icon" id="serviceFormIcon">
-            <i class="fa-solid fa-mobile-screen-button"></i>
-          </div>
-
-          <form id="serviceForm">
-
-            <div id="dynamicFields"></div>
-
-            <div class="amount-display">
-              <span>Amount to Pay</span>
-              <h2 id="serviceAmount">₦0.00</h2>
-            </div>
-
-            <button type="submit" class="primary-btn">
-              Continue <i class="fa-solid fa-arrow-right"></i>
-            </button>
-
-          </form>
-
-          <p class="secure-note">
-            <i class="fa-solid fa-lock"></i>
-            Secure payment interface
-          </p>
-
-        </div>
-
-      </section>
-
-      <!-- FUND WALLET -->
-      <section id="fundPage" class="page">
-
-        <div class="page-heading">
-          <button class="back-btn" onclick="navigate('home')">
-            <i class="fa-solid fa-arrow-left"></i>
-          </button>
-
-          <div>
-            <h2>Fund Wallet</h2>
-            <p>Add money to your ZENTRA wallet</p>
-          </div>
-        </div>
-
-        <div class="form-card">
-
-          <div class="service-form-icon">
-            <i class="fa-solid fa-wallet"></i>
-          </div>
-
-          <form id="fundForm">
-
-            <label for="fundAmount">Amount (₦)</label>
-
-            <input
-              type="number"
-              id="fundAmount"
-              placeholder="Enter amount"
-              min="100"
-              required
-            >
-
-            <label>Payment Method</label>
-
-            <select id="fundMethod" required>
-              <option value="">Select payment method</option>
-              <option value="Paystack">Paystack</option>
-              <option value="Flutterwave">Flutterwave</option>
-            </select>
-
-            <button type="submit" class="primary-btn">
-              Continue to Payment
-            </button>
-
-          </form>
-
-        </div>
-
-      </section>
-
-      <!-- TRANSACTION HISTORY -->
-      <section id="historyPage" class="page">
-
-        <div class="page-heading">
-          <button class="back-btn" onclick="navigate('home')">
-            <i class="fa-solid fa-arrow-left"></i>
-          </button>
-
-          <div>
-            <h2>Transactions</h2>
-            <p>View your payment history</p>
-          </div>
-        </div>
-
-        <div id="allTransactions" class="transactions-list">
-          <div class="empty-state">
-            <i class="fa-solid fa-receipt"></i>
-            <p>No transactions found</p>
-          </div>
-        </div>
-
-      </section>
-
-      <!-- NOTIFICATIONS -->
-      <section id="notificationsPage" class="page">
-
-        <div class="page-heading">
-          <button class="back-btn" onclick="navigate('home')">
-            <i class="fa-solid fa-arrow-left"></i>
-          </button>
-
-          <div>
-            <h2>Notifications</h2>
-            <p>Your account updates</p>
-          </div>
-        </div>
-
-        <div class="empty-state">
-          <i class="fa-regular fa-bell"></i>
-          <p>No notifications yet</p>
-        </div>
-
-      </section>
-
-      <!-- PROFILE -->
-      <section id="profilePage" class="page">
-
-        <div class="page-heading">
-          <button class="back-btn" onclick="navigate('home')">
-            <i class="fa-solid fa-arrow-left"></i>
-          </button>
-
-          <div>
-            <h2>My Account</h2>
-            <p>Manage your profile</p>
-          </div>
-        </div>
-
-        <div class="profile-card">
-
-          <div class="profile-avatar">
-            <i class="fa-solid fa-user"></i>
-          </div>
-
-          <h2 id="profileName">ZENTRA USER</h2>
-          <p id="profilePhone">Update your account details</p>
-
-        </div>
-
-        <div class="settings-list">
-
-          <button onclick="editProfile()">
-            <i class="fa-solid fa-user-pen"></i>
-            Edit Profile
-            <i class="fa-solid fa-chevron-right"></i>
-          </button>
-
-          <button onclick="navigate('history')">
-            <i class="fa-solid fa-clock-rotate-left"></i>
-            Transaction History
-            <i class="fa-solid fa-chevron-right"></i>
-          </button>
-
-          <button onclick="showSupport()">
-            <i class="fa-solid fa-headset"></i>
-            Customer Support
-            <i class="fa-solid fa-chevron-right"></i>
-          </button>
-
-          <button onclick="showAbout()">
-            <i class="fa-solid fa-circle-info"></i>
-            About ZENTRA PAY
-            <i class="fa-solid fa-chevron-right"></i>
-          </button>
-
-        </div>
-
-      </section>
-
     </main>
 
-    <!-- BOTTOM NAVIGATION -->
-    <nav class="bottom-nav">
-
-      <button class="nav-item active" onclick="navigate('home')">
-        <i class="fa-solid fa-house"></i>
-        <small>Home</small>
-      </button>
-
-      <button class="nav-item" onclick="navigate('history')">
-        <i class="fa-solid fa-clock-rotate-left"></i>
-        <small>History</small>
-      </button>
-
-      <button class="nav-item center-nav" onclick="navigate('fund')">
-        <span><i class="fa-solid fa-plus"></i></span>
-        <small>Fund</small>
-      </button>
-
-      <button class="nav-item" onclick="navigate('notifications')">
-        <i class="fa-regular fa-bell"></i>
-        <small>Alerts</small>
-      </button>
-
-      <button class="nav-item" onclick="navigate('profile')">
-        <i class="fa-regular fa-user"></i>
-        <small>Profile</small>
-      </button>
-
-    </nav>
-
+    <footer>© 2026 ZENTRA PAY. All rights reserved.</footer>
   </div>
 
-  <!-- MODAL -->
-  <div id="appModal" class="modal">
-    <div class="modal-content">
-
-      <button class="modal-close" onclick="closeModal()">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-
-      <div id="modalIcon" class="modal-icon">
-        <i class="fa-solid fa-circle-info"></i>
-      </div>
-
-      <h2 id="modalTitle">Information</h2>
-
-      <p id="modalMessage">Message</p>
-
-      <button class="primary-btn" onclick="closeModal()">
-        Okay
-      </button>
-
-    </div>
-  </div>
-
-  <!-- JAVASCRIPT -->
-  <script src="script.js"></script>
-
+  <script type="module" src="script.js"></script>
 </body>
 </html>
