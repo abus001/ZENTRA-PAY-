@@ -5,132 +5,512 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#080808">
-  <title>ZENTRA PAY</title>
+  <meta name="description" content="ZENTRA PAY - Smart payments and digital services">
+  <title>ZENTRA PAY | Smart Payments</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app">
-    <header class="brand">
-      <div class="brand-mark">Z</div>
-      <div>
-        <h1>ZENTRA <span>PAY</span></h1>
-        <small>SMART PAYMENT PLATFORM</small>
+
+  <!-- LOADING SCREEN -->
+  <div id="loadingScreen" class="loading-screen">
+    <div class="loading-logo">Z</div>
+    <h2>ZENTRA PAY</h2>
+    <p>Smart Payments. Simple Life.</p>
+    <div class="loader"></div>
+  </div>
+
+  <!-- NOTIFICATION -->
+  <div id="notification" class="notification"></div>
+
+  <!-- AUTHENTICATION -->
+  <main id="authScreen" class="auth-screen hidden">
+    <div class="auth-brand">
+      <div class="brand-symbol">Z</div>
+      <h1>ZENTRA <span>PAY</span></h1>
+      <p>Smart Payments. Simple Life.</p>
+    </div>
+
+    <div class="auth-card">
+      <div class="auth-heading">
+        <h2 id="authTitle">Welcome Back</h2>
+        <p id="authSubtitle">Sign in to continue to your account</p>
       </div>
-    </header>
 
-    <main>
-      <section id="authScreen" class="auth-card">
-        <div class="welcome">
-          <span class="eyebrow">WELCOME TO ZENTRA PAY</span>
-          <h2 id="authHeading">Create your account</h2>
-          <p id="authDescription">Register to access your account securely.</p>
+      <div class="auth-tabs">
+        <button id="loginTab" class="auth-tab active" type="button">Login</button>
+        <button id="registerTab" class="auth-tab" type="button">Create Account</button>
+      </div>
+
+      <form id="loginForm">
+        <label for="loginEmail">Email Address</label>
+        <input id="loginEmail" type="email" placeholder="Enter your email" autocomplete="email" required>
+
+        <label for="loginPassword">Password</label>
+        <div class="password-field">
+          <input id="loginPassword" type="password" placeholder="Enter password" autocomplete="current-password" required>
+          <button type="button" class="password-toggle" data-toggle="loginPassword">Show</button>
         </div>
 
-        <div class="switcher">
-          <button class="switch active" id="registerTab" type="button">Register</button>
-          <button class="switch" id="loginTab" type="button">Login</button>
+        <button type="submit" class="primary-btn" id="loginButton">Sign In</button>
+
+        <button type="button" id="forgotPassword" class="text-btn">Forgot password?</button>
+      </form>
+
+      <form id="registerForm" class="hidden">
+        <label for="registerName">Full Name</label>
+        <input id="registerName" type="text" placeholder="Enter your full name" autocomplete="name" required>
+
+        <label for="registerPhone">Phone Number</label>
+        <input id="registerPhone" type="tel" placeholder="08012345678" autocomplete="tel" required>
+
+        <label for="registerEmail">Email Address</label>
+        <input id="registerEmail" type="email" placeholder="Enter your email" autocomplete="email" required>
+
+        <label for="registerPassword">Password</label>
+        <div class="password-field">
+          <input id="registerPassword" type="password" placeholder="Create a password" minlength="8" autocomplete="new-password" required>
+          <button type="button" class="password-toggle" data-toggle="registerPassword">Show</button>
         </div>
 
-        <div class="method-switch">
-          <button class="method active" id="emailMethod" type="button">Email</button>
-          <button class="method" id="phoneMethod" type="button">Phone number</button>
+        <label for="confirmPassword">Confirm Password</label>
+        <input id="confirmPassword" type="password" placeholder="Confirm password" minlength="8" autocomplete="new-password" required>
+
+        <label class="agreement">
+          <input id="termsCheck" type="checkbox" required>
+          <span>I agree to the Terms and Privacy Policy.</span>
+        </label>
+
+        <button type="submit" class="primary-btn" id="registerButton">Create Account</button>
+      </form>
+
+      <div class="auth-footer">
+        <span>Protected by ZENTRA PAY Security</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- MAIN APPLICATION -->
+  <div id="appScreen" class="app-screen hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-symbol small">Z</div>
+        <div>
+          <h2>ZENTRA <span>PAY</span></h2>
+          <small>SMART FINANCIAL SERVICES</small>
         </div>
+      </div>
 
-        <form id="emailForm">
-          <div id="nameField" class="field">
-            <label for="fullName">Full name</label>
-            <input id="fullName" type="text" placeholder="Enter your full name" autocomplete="name">
-          </div>
+      <nav class="sidebar-nav">
+        <p class="nav-heading">MAIN MENU</p>
 
-          <div class="field">
-            <label for="email">Email address</label>
-            <input id="email" type="email" placeholder="example@email.com" autocomplete="email">
-          </div>
+        <button class="nav-link active" data-page="dashboard">
+          <span>⌂</span> Dashboard
+        </button>
 
-          <div class="field">
-            <label for="emailPassword">Password</label>
-            <input id="emailPassword" type="password" placeholder="At least 6 characters" autocomplete="current-password" minlength="6">
-          </div>
+        <button class="nav-link" data-page="services">
+          <span>▦</span> All Services
+        </button>
 
-          <div id="confirmField" class="field">
-            <label for="confirmPassword">Confirm password</label>
-            <input id="confirmPassword" type="password" placeholder="Enter password again" autocomplete="new-password">
-          </div>
+        <button class="nav-link" data-page="wallet">
+          <span>▣</span> My Wallet
+        </button>
 
-          <button class="primary-btn" id="emailSubmit" type="submit">Create account</button>
-          <button class="text-btn hidden" id="forgotBtn" type="button">Forgot password?</button>
-        </form>
+        <button class="nav-link" data-page="transactions">
+          <span>↔</span> Transactions
+        </button>
 
-        <form id="phoneForm" class="hidden">
-          <div id="phoneNameField" class="field">
-            <label for="phoneName">Full name</label>
-            <input id="phoneName" type="text" placeholder="Enter your full name" autocomplete="name">
-          </div>
+        <p class="nav-heading">ACCOUNT</p>
 
-          <div class="field">
-            <label for="phoneNumber">Phone number</label>
-            <input id="phoneNumber" type="tel" placeholder="+2348012345678" autocomplete="tel">
-            <small>Use international format, e.g. +2348012345678</small>
-          </div>
+        <button class="nav-link" data-page="profile">
+          <span>♙</span> My Profile
+        </button>
 
-          <div id="recaptcha-container"></div>
+        <button class="nav-link" data-page="settings">
+          <span>⚙</span> Settings
+        </button>
 
-          <button class="primary-btn" id="sendOtpBtn" type="submit">Send verification code</button>
+        <button class="nav-link" data-page="support">
+          <span>✉</span> Help & Support
+        </button>
+      </nav>
 
-          <div id="otpArea" class="hidden">
-            <div class="field">
-              <label for="otpCode">Verification code</label>
-              <input id="otpCode" type="text" inputmode="numeric" placeholder="Enter 6-digit code" maxlength="6">
-            </div>
-            <button class="primary-btn" id="verifyOtpBtn" type="button">Verify and continue</button>
-          </div>
-        </form>
-
-        <p id="message" class="message" aria-live="polite"></p>
-        <p class="secure-note">🔒 Your account is protected by Firebase Authentication.</p>
-      </section>
-
-      <section id="dashboard" class="hidden">
-        <div class="dash-top">
+      <div class="sidebar-bottom">
+        <div class="security-note">
+          <span>◆</span>
           <div>
-            <small>WELCOME BACK</small>
-            <h2 id="userName">User</h2>
+            <strong>Secure Account</strong>
+            <small>Your security matters</small>
           </div>
-          <button id="logoutBtn" class="logout-btn" type="button">Log out</button>
         </div>
 
-        <div class="wallet-card">
-          <span>WALLET BALANCE</span>
-          <h2>₦ <span id="walletBalance">0.00</span></h2>
-          <small>Wallet funding will be enabled after payment integration.</small>
+        <button id="logoutButton" class="logout-btn">↪ Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- APP CONTENT -->
+    <div class="main-content">
+
+      <header class="topbar">
+        <button id="menuToggle" class="menu-toggle" aria-label="Open menu">☰</button>
+
+        <div class="topbar-title">
+          <h2 id="pageTitle">Dashboard</h2>
+          <p id="welcomeMessage">Welcome to ZENTRA PAY</p>
         </div>
 
-        <h3>Services</h3>
-        <div class="services">
-          <div class="service"><span>📱</span><b>Airtime</b></div>
-          <div class="service"><span>🌐</span><b>Data</b></div>
-          <div class="service"><span>💡</span><b>Electricity</b></div>
-          <div class="service"><span>📺</span><b>Pay TV</b></div>
-          <div class="service"><span>🎓</span><b>WAEC PIN</b></div>
-          <div class="service"><span>📝</span><b>NECO PIN</b></div>
-          <div class="service"><span>📚</span><b>JAMB PIN</b></div>
-          <div class="service"><span>📡</span><b>Internet</b></div>
-          <div class="service"><span>✉️</span><b>Bulk SMS</b></div>
-          <div class="service"><span>🎁</span><b>Gift Cards</b></div>
-          <div class="service"><span>🎟️</span><b>Vouchers</b></div>
-          <div class="service"><span>🏫</span><b>School Fees</b></div>
+        <div class="topbar-actions">
+          <button id="notificationButton" class="icon-btn" aria-label="Notifications">♧</button>
+          <button class="user-avatar" id="headerAvatar">U</button>
+        </div>
+      </header>
+
+      <!-- DASHBOARD PAGE -->
+      <section id="dashboardPage" class="page active-page">
+
+        <div class="welcome-banner">
+          <div>
+            <span class="eyebrow">YOUR DIGITAL FINANCIAL SPACE</span>
+            <h1>Welcome, <span id="dashboardUserName">User</span></h1>
+            <p>Manage your everyday payments with ease.</p>
+          </div>
+          <div class="banner-mark">Z</div>
         </div>
 
-        <div class="account-info">
-          <h3>Account information</h3>
-          <p id="accountEmail"></p>
-          <p id="accountPhone"></p>
-          <p class="notice">Services and wallet payments are not active until their approved provider APIs and secure backend are connected.</p>
+        <div class="dashboard-grid">
+
+          <div class="balance-card">
+            <div class="balance-top">
+              <span>AVAILABLE WALLET BALANCE</span>
+              <button id="toggleBalance" aria-label="Toggle balance">◉</button>
+            </div>
+
+            <h2 id="walletBalance">₦0.00</h2>
+            <p>Wallet Account</p>
+
+            <div class="balance-actions">
+              <button class="balance-btn" data-page="wallet">＋ Add Money</button>
+              <button class="balance-btn secondary" data-page="transactions">History</button>
+            </div>
+          </div>
+
+          <div class="account-card">
+            <span class="card-label">ACCOUNT STATUS</span>
+            <div class="status-indicator">
+              <span class="status-dot"></span>
+              <strong id="accountStatus">Checking...</strong>
+            </div>
+            <div class="account-divider"></div>
+            <span class="card-label">VERIFICATION STATUS</span>
+            <strong id="kycStatus">Pending</strong>
+            <p>Keep your account information updated.</p>
+          </div>
+        </div>
+
+        <div class="section-heading">
+          <div>
+            <h2>Quick Services</h2>
+            <p>Choose a service to get started.</p>
+          </div>
+          <button class="view-all" data-page="services">View all →</button>
+        </div>
+
+        <div class="services-grid">
+          <button class="service-item" data-service="airtime">
+            <span class="service-icon">▣</span>
+            <strong>Airtime</strong>
+            <small>Buy airtime</small>
+          </button>
+
+          <button class="service-item" data-service="data">
+            <span class="service-icon">◉</span>
+            <strong>Data</strong>
+            <small>Buy data plans</small>
+          </button>
+
+          <button class="service-item" data-service="electricity">
+            <span class="service-icon">ϟ</span>
+            <strong>Electricity</strong>
+            <small>Pay bills</small>
+          </button>
+
+          <button class="service-item" data-service="cable">
+            <span class="service-icon">▤</span>
+            <strong>TV Subscription</strong>
+            <small>Pay TV bills</small>
+          </button>
+
+          <button class="service-item" data-service="education">
+            <span class="service-icon">▧</span>
+            <strong>Exam PIN</strong>
+            <small>WAEC, NECO, JAMB</small>
+          </button>
+
+          <button class="service-item" data-service="internet">
+            <span class="service-icon">◎</span>
+            <strong>Internet</strong>
+            <small>Internet plans</small>
+          </button>
+
+          <button class="service-item" data-service="sms">
+            <span class="service-icon">✉</span>
+            <strong>Bulk SMS</strong>
+            <small>Send messages</small>
+          </button>
+
+          <button class="service-item" data-service="giftcard">
+            <span class="service-icon">◇</span>
+            <strong>Gift Cards</strong>
+            <small>Digital cards</small>
+          </button>
+        </div>
+
+        <div class="section-heading transaction-heading">
+          <div>
+            <h2>Recent Transactions</h2>
+            <p>Your latest wallet activities.</p>
+          </div>
+          <button class="view-all" data-page="transactions">See all →</button>
+        </div>
+
+        <div class="table-card">
+          <div class="empty-state">
+            <span>↔</span>
+            <strong>No transactions yet</strong>
+            <p>Your transactions will appear here.</p>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- SERVICES PAGE -->
+      <section id="servicesPage" class="page">
+        <div class="page-intro">
+          <h1>All Services</h1>
+          <p>Explore the services available on ZENTRA PAY.</p>
+        </div>
+
+        <div class="services-grid full-services">
+          <button class="service-item" data-service="airtime"><span class="service-icon">▣</span><strong>Airtime</strong><small>Mobile recharge</small></button>
+          <button class="service-item" data-service="data"><span class="service-icon">◉</span><strong>Data</strong><small>Internet bundles</small></button>
+          <button class="service-item" data-service="electricity"><span class="service-icon">ϟ</span><strong>Electricity</strong><small>Electricity bills</small></button>
+          <button class="service-item" data-service="cable"><span class="service-icon">▤</span><strong>Pay TV</strong><small>DStv, GOtv, StarTimes</small></button>
+          <button class="service-item" data-service="education"><span class="service-icon">▧</span><strong>Exam PINs</strong><small>WAEC, NECO, JAMB</small></button>
+          <button class="service-item" data-service="internet"><span class="service-icon">◎</span><strong>Internet</strong><small>Internet subscription</small></button>
+          <button class="service-item" data-service="sms"><span class="service-icon">✉</span><strong>Bulk SMS</strong><small>Bulk messaging</small></button>
+          <button class="service-item" data-service="giftcard"><span class="service-icon">◇</span><strong>Gift Cards</strong><small>Digital gift cards</small></button>
+          <button class="service-item" data-service="voucher"><span class="service-icon">▱</span><strong>Vouchers</strong><small>Digital vouchers</small></button>
+          <button class="service-item" data-service="schoolfees"><span class="service-icon">▤</span><strong>School Fees</strong><small>Education payments</small></button>
         </div>
       </section>
-    </main>
 
-    <footer>© 2026 ZENTRA PAY. All rights reserved.</footer>
+      <!-- SERVICE FORM PAGE -->
+      <section id="servicePage" class="page">
+        <div class="page-intro">
+          <button class="back-btn" data-page="services">← Back to services</button>
+          <h1 id="serviceTitle">Service</h1>
+          <p id="serviceDescription">Complete the form below.</p>
+        </div>
+
+        <div class="form-card">
+          <form id="serviceForm">
+            <div id="serviceFields"></div>
+
+            <div class="form-summary">
+              <span>Service information</span>
+              <p>Review all details before submitting your request.</p>
+            </div>
+
+            <button class="primary-btn" type="submit" id="serviceSubmit">Continue</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- WALLET PAGE -->
+      <section id="walletPage" class="page">
+        <div class="page-intro">
+          <h1>My Wallet</h1>
+          <p>Manage your ZENTRA PAY wallet.</p>
+        </div>
+
+        <div class="wallet-overview">
+          <span>AVAILABLE BALANCE</span>
+          <h2 id="walletPageBalance">₦0.00</h2>
+          <p>NGN · Nigerian Naira</p>
+        </div>
+
+        <div class="section-heading"><h2>Fund Wallet</h2></div>
+
+        <div class="form-card">
+          <form id="fundWalletForm">
+            <label for="fundAmount">Amount (₦)</label>
+            <input id="fundAmount" type="number" min="100" step="50" placeholder="Enter amount" required>
+
+            <label>Payment Method</label>
+            <div class="payment-methods">
+              <label class="payment-option">
+                <input type="radio" name="paymentMethod" value="virtual-account" checked>
+                <span>Virtual Account</span>
+              </label>
+              <label class="payment-option">
+                <input type="radio" name="paymentMethod" value="opay">
+                <span>OPay Payment</span>
+              </label>
+            </div>
+
+            <button class="primary-btn" type="submit">Continue to Funding</button>
+          </form>
+        </div>
+
+        <div class="section-heading"><h2>Virtual Account Details</h2></div>
+        <div id="virtualAccounts" class="virtual-account-list">
+          <div class="empty-state">
+            <span>▣</span>
+            <strong>Account details will appear here</strong>
+            <p>Connect your payment provider to retrieve account details.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- TRANSACTIONS PAGE -->
+      <section id="transactionsPage" class="page">
+        <div class="page-intro">
+          <h1>Transactions</h1>
+          <p>View your payment and wallet history.</p>
+        </div>
+
+        <div class="filter-bar">
+          <input id="transactionSearch" type="search" placeholder="Search transactions...">
+          <select id="transactionFilter">
+            <option value="all">All Transactions</option>
+            <option value="successful">Successful</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
+
+        <div id="transactionList" class="table-card">
+          <div class="empty-state">
+            <span>↔</span>
+            <strong>No transactions found</strong>
+            <p>Your payment records will show here.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- PROFILE PAGE -->
+      <section id="profilePage" class="page">
+        <div class="page-intro">
+          <h1>My Profile</h1>
+          <p>Manage your personal information.</p>
+        </div>
+
+        <div class="form-card">
+          <form id="profileForm">
+            <label for="profileName">Full Name</label>
+            <input id="profileName" type="text" placeholder="Your full name">
+
+            <label for="profilePhone">Phone Number</label>
+            <input id="profilePhone" type="tel" placeholder="Your phone number">
+
+            <label for="profileEmail">Email Address</label>
+            <input id="profileEmail" type="email" placeholder="Your email address" disabled>
+
+            <label for="profileAddress">Address</label>
+            <textarea id="profileAddress" rows="3" placeholder="Enter your address"></textarea>
+
+            <button type="submit" class="primary-btn">Save Profile</button>
+          </form>
+        </div>
+
+        <div class="form-card kyc-card">
+          <h2>Identity Verification</h2>
+          <p>Identity verification will be provided through an authorized verification service.</p>
+          <div class="kyc-status-box">
+            <span>Verification Status</span>
+            <strong id="profileKycStatus">Pending</strong>
+          </div>
+          <p class="small-note">Do not share your NIN or identity documents through public chat or unsecured forms.</p>
+        </div>
+      </section>
+
+      <!-- SETTINGS PAGE -->
+      <section id="settingsPage" class="page">
+        <div class="page-intro">
+          <h1>Settings</h1>
+          <p>Manage your account preferences.</p>
+        </div>
+
+        <div class="settings-list">
+          <div class="setting-row">
+            <div><strong>Account Security</strong><p>Protect your account access.</p></div>
+            <span>›</span>
+          </div>
+          <div class="setting-row">
+            <div><strong>Password</strong><p>Manage your sign-in password.</p></div>
+            <button id="changePasswordButton" class="outline-btn">Change</button>
+          </div>
+          <div class="setting-row">
+            <div><strong>Notifications</strong><p>Payment and account updates.</p></div>
+            <span>›</span>
+          </div>
+          <div class="setting-row">
+            <div><strong>Privacy Policy</strong><p>Learn how your information is handled.</p></div>
+            <span>›</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- SUPPORT PAGE -->
+      <section id="supportPage" class="page">
+        <div class="page-intro">
+          <h1>Help & Support</h1>
+          <p>We are here to help with your account.</p>
+        </div>
+
+        <div class="form-card">
+          <form id="supportForm">
+            <label for="supportSubject">Subject</label>
+            <input id="supportSubject" type="text" placeholder="What do you need help with?" required>
+
+            <label for="supportMessage">Message</label>
+            <textarea id="supportMessage" rows="5" placeholder="Describe your issue..." required></textarea>
+
+            <button type="submit" class="primary-btn">Submit Request</button>
+          </form>
+        </div>
+      </section>
+
+      <footer class="app-footer">
+        <p>© <span id="currentYear"></span> ZENTRA PAY. All rights reserved.</p>
+        <span>Smart Payments. Simple Life.</span>
+      </footer>
+
+    </div>
+
+    <!-- MOBILE BOTTOM NAVIGATION -->
+    <nav class="bottom-nav">
+      <button class="bottom-link active" data-page="dashboard"><span>⌂</span><small>Home</small></button>
+      <button class="bottom-link" data-page="services"><span>▦</span><small>Services</small></button>
+      <button class="bottom-link" data-page="wallet"><span>▣</span><small>Wallet</small></button>
+      <button class="bottom-link" data-page="transactions"><span>↔</span><small>History</small></button>
+      <button class="bottom-link" data-page="profile"><span>♙</span><small>Profile</small></button>
+    </nav>
+
+  </div>
+
+  <!-- MODAL -->
+  <div id="appModal" class="modal hidden">
+    <div class="modal-content">
+      <button id="closeModal" class="modal-close" aria-label="Close">×</button>
+      <div id="modalContent"></div>
+    </div>
   </div>
 
   <script type="module" src="script.js"></script>
