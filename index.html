@@ -333,37 +333,61 @@
       </section>
 
       <!-- WALLET PAGE -->
-      <section id="walletPage" class="page">
-        <div class="page-intro">
-          <h1>My Wallet</h1>
-          <p>Manage your ZENTRA PAY wallet.</p>
-        </div>
+      <div class="section-heading">
+  <h2>Fund Wallet</h2>
+</div>
 
-        <div class="wallet-overview">
-          <span>AVAILABLE BALANCE</span>
-          <h2 id="walletPageBalance">₦0.00</h2>
-          <p>NGN · Nigerian Naira</p>
-        </div>
+<div class="form-card">
+  <form id="fundWalletForm">
+    <label for="fundAmount">Amount (₦)</label>
 
-        <div class="section-heading"><h2>Fund Wallet</h2></div>
+    <input
+      id="fundAmount"
+      type="number"
+      min="100"
+      max="100000"
+      step="50"
+      placeholder="Enter amount (e.g. 1000)"
+      required
+    >
 
-        <div class="form-card">
-          <form id="fundWalletForm">
-            <label for="fundAmount">Amount (₦)</label>
-            <input id="fundAmount" type="number" min="100" step="50" placeholder="Enter amount" required>
+    <label>Payment Method</label>
 
-            <label>Payment Method</label>
-            <div class="payment-methods">
-              <label class="payment-option">
-                <input type="radio" name="paymentMethod" value="virtual-account" checked>
-                <span>Virtual Account</span>
-              </label>
-              <label class="payment-option">
-                <input type="radio" name="paymentMethod" value="opay">
-                <span>OPay Payment</span>
-              </label>
-            </div>
+    <div class="payment-methods">
+      <label class="payment-option">
+        <input
+          type="radio"
+          name="paymentMethod"
+          value="opay"
+          checked
+        >
+        <span>OPay Bank Transfer</span>
+      </label>
+    </div>
 
+    <button class="primary-btn" type="submit">
+      Continue to Funding
+    </button>
+
+    <p id="fundWalletMessage" role="status"></p>
+  </form>
+</div>
+
+<div id="fundingDetails" class="form-card" hidden>
+  <h3>Bank Transfer Details</h3>
+  <p>Bank: <strong id="fundingBankName">—</strong></p>
+  <p>Account Number: <strong id="fundingAccountNumber">—</strong></p>
+  <p>Amount: <strong id="fundingAmountDisplay">—</strong></p>
+  <p>Status: <strong id="fundingStatus">Pending</strong></p>
+
+  <button
+    type="button"
+    class="primary-btn"
+    id="verifyFundingBtn"
+  >
+    Verify Payment
+  </button>
+</div>
             <button class="primary-btn" type="submit">Continue to Funding</button>
           </form>
         </div>
