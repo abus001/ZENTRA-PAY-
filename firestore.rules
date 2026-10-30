@@ -17,12 +17,24 @@ service cloud.firestore {
         request.auth.token.role in ['admin', 'superAdmin'];
     }
 
-    // USER PROFILES
+    // USER ACCOUNTS
     match /users/{uid} {
+
       allow create: if isOwner(uid)
         && request.resource.data.role == 'user'
         && request.resource.data.walletBalance == 0
-        && request.resource.data.status == 'active';
+        && request.resource.data.status == 'active'
+        && request.resource.data.kycStatus == 'pending'
+        && request.resource.data.keys().hasOnly([
+          'fullName',
+          'email',
+          'phone',
+          'role',
+          'walletBalance',
+          'status',
+          'kycStatus',
+          'createdAt'
+        ]);
 
       allow read: if isOwner(uid) || isAdmin();
 
@@ -38,21 +50,21 @@ service cloud.firestore {
 
       allow delete: if false;
 
-      // CUSTOMER TRANSACTIONS
+      // TRANSACTIONS
       match /transactions/{transactionId} {
         allow read: if isOwner(uid) || isAdmin();
         allow create, update, delete: if false;
       }
     }
 
-    // WALLET FUNDING
+    // OPAY WALLET FUNDING
     match /walletFunding/{fundingId} {
       allow read: if signedIn()
         && resource.data.uid == request.auth.uid;
       allow write: if false;
     }
 
-    // PAYMENT CREDIT LEDGER
+    // OPAY CREDIT LEDGER
     match /opayCredits/{reference} {
       allow read: if isAdmin();
       allow write: if false;
@@ -81,7 +93,7 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // DEFAULT DENY
+    // DENY EVERYTHING ELSE
     match /{document=**} {
       allow read, write: if false;
     }
