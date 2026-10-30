@@ -1,20 +1,13 @@
 
-/* =====================================================
-   ZENTRA PAY
-   Main Application Script
-   Firebase Authentication + Cloud Firestore
-   ===================================================== */
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
 
 import {
   getAuth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  onAuthStateChanged,
-  signOut,
   sendPasswordResetEmail,
-  updatePassword
+  signOut,
+  onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 
 import {
@@ -24,18 +17,21 @@ import {
   setDoc,
   updateDoc,
   collection,
-  addDoc,
-  onSnapshot,
   query,
   orderBy,
-  limit,
+  onSnapshot,
+  addDoc,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
+import {
+  getFunctions,
+  httpsCallable
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-functions.js";
 
-/* =====================================================
-   1. FIREBASE CONFIGURATION
-   ===================================================== */
+// ==========================================
+// 1. FIREBASE CONFIGURATION
+// ==========================================
 
 const firebaseConfig = {
   apiKey: "AIzaSyAnOkETG5voBPvRCaFO7ZklOOV4odMux64",
@@ -46,995 +42,430 @@ const firebaseConfig = {
   appId: "1:143106553125:web:4a0b40407ecd67fb9d96cc"
 };
 
-const firebaseApp = initializeApp(firebaseConfig);
-const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
+// Must match the region in functions/index.js
+const functions = getFunctions(app, "africa-south1");
 
-/* =====================================================
-   2. GLOBAL VARIABLES
-   ===================================================== */
+const createTransactionRequest = httpsCallable(
+  functions,
+  "createTransactionRequest"
+);
+
+const reviewTransaction = httpsCallable(
+  functions,
+  "reviewTransaction"
+);
+
+const getCustomerWallet = httpsCallable(
+  functions,
+  "getCustomerWallet"
+);
+
+// ==========================================
+// 2. APPLICATION STATE
+// ==========================================
 
 let currentUser = null;
-let currentUserData = {};
-let balanceVisible = true;
-let currentService = "";
-let unsubscribeProfile = null;
+let currentProfile = null;
+let cachedTransactions = [];
 let unsubscribeTransactions = null;
-
-
-/* =====================================================
-   3. HTML ELEMENTS
-   ===================================================== */
+let unsubscribeProfile = null;
+let balanceVisible = true;
+let activePage = "dashboard";
+let selectedService = "";
 
 const $ = (id) => document.getElementById(id);
 
-const loadingScreen = $("loadingScreen");
-const authScreen = $("authScreen");
-const appScreen = $("appScreen");
+const money = (amount) =>
+  new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN"
+  }).format(Number(amount || 0));
 
-const loginForm = $("loginForm");
-const registerForm = $("registerForm");
+const safeText = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  })[char]);
 
-const loginTab = $("loginTab");
-const registerTab = $("registerTab");
+// ==========================================
+// 3. NOTIFICATIONS
+// ==========================================
 
-const notification = $("notification");
+function notify(message, type = "info") {
+  const box = $("notification");
 
+  if (!box) {
+    alert(message);
+    return;
+  }
 
-/* =====================================================
-   4. NOTIFICATION SYSTEM
-   ===================================================== */
+  box.textContent = message;
+  box.className = `notification show ${type}`;
 
-function showMessage(message, type = "success") {
-  notification.textContent = message;
-  notification.className = "notification show " + type;
+  clearTimeout(notify.timer);
 
-  setTimeout(() => {
-    notification.className = "notification";
+  notify.timer = setTimeout(() => {
+    box.className = "notification";
   }, 3500);
 }
 
+// ==========================================
+// 4. LOADING SCREEN
+// ==========================================
 
-/* =====================================================
-   5. LOADING SCREEN
-   ===================================================== */
+function setLoading(show) {
+  const screen = $("loadingScreen");
 
-function hideLoading() {
-  if (loadingScreen) {
-    loadingScreen.classList.add("hidden");
+  if (screen) {
+    screen.style.display = show ? "flex" : "none";
   }
 }
 
+// ==========================================
+// 5. AUTHENTICATION
+// ==========================================
 
-/* =====================================================
-   6. AUTHENTICATION TABS
-   ===================================================== */
+function showAuthMode(mode) {
+  const login = mode === "login";
 
-function showLogin() {
-  loginForm.classList.remove("hidden");
-  registerForm.classList.add("hidden");
+  if ($("loginForm")) {
+    $("loginForm").style.display = login ? "block" : "none";
+  }
 
-  loginTab.classList.add("active");
-  registerTab.classList.remove("active");
+  if ($("registerForm")) {
+    $("registerForm").style.display = login ? "none" : "block";
+  }
 
-  $("authTitle").textContent = "Welcome Back";
-  $("authSubtitle").textContent =
-    "Sign in to continue to your account";
+  if ($("authTitle")) {
+    $("authTitle").textContent = login
+      ? "Welcome Back"
+      : "Create Your Account";
+  }
+
+  if ($("authSubtitle")) {
+    $("authSubtitle").textContent = login
+      ? "Sign in to continue to ZENTRA PAY"
+      : "Register and start using ZENTRA PAY";
+  }
 }
 
-function showRegister() {
-  registerForm.classList.remove("hidden");
-  loginForm.classList.add("hidden");
+function showApplication(show) {
+  if ($("authScreen")) {
+    $("authScreen").style.display = show ? "none" : "flex";
+  }
 
-  registerTab.classList.add("active");
-  loginTab.classList.remove("active");
-
-  $("authTitle").textContent = "Create Account";
-  $("authSubtitle").textContent =
-    "Join ZENTRA PAY today";
+  if ($("appScreen")) {
+    $("appScreen").style.display = show ? "block" : "none";
+  }
 }
 
-loginTab.addEventListener("click", showLogin);
-registerTab.addEventListener("click", showRegister);
-
-
-/* =====================================================
-   7. PASSWORD VISIBILITY
-   ===================================================== */
-
-document.querySelectorAll(".password-toggle").forEach(button => {
-  button.addEventListener("click", () => {
-    const input = $(button.dataset.toggle);
-
-    if (!input) return;
-
-    const hidden = input.type === "password";
-
-    input.type = hidden ? "text" : "password";
-    button.textContent = hidden ? "Hide" : "Show";
+if ($("loginTab")) {
+  $("loginTab").addEventListener("click", () => {
+    showAuthMode("login");
   });
-});
+}
 
+if ($("registerTab")) {
+  $("registerTab").addEventListener("click", () => {
+    showAuthMode("register");
+  });
+}
 
-/* =====================================================
-   8. REGISTER USER
-   ===================================================== */
+if ($("loginForm")) {
+  $("loginForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
 
-registerForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
+    const email = $("loginEmail")?.value.trim();
+    const password = $("loginPassword")?.value;
 
-  const name = $("registerName").value.trim();
-  const phone = $("registerPhone").value.trim();
-  const email = $("registerEmail").value.trim().toLowerCase();
-  const password = $("registerPassword").value;
-  const confirmPassword = $("confirmPassword").value;
-  const terms = $("termsCheck").checked;
-
-  if (!name || !phone || !email || !password) {
-    showMessage("Please complete all required fields.", "error");
-    return;
-  }
-
-  if (password.length < 8) {
-    showMessage("Password must contain at least 8 characters.", "error");
-    return;
-  }
-
-  if (password !== confirmPassword) {
-    showMessage("Passwords do not match.", "error");
-    return;
-  }
-
-  if (!terms) {
-    showMessage("Please accept the terms and conditions.", "error");
-    return;
-  }
-
-  const button = $("registerButton");
-  button.disabled = true;
-  button.textContent = "Creating account...";
-
-  try {
-    const result = await createUserWithEmailAndPassword(
-      auth,
-      email,
-      password
-    );
-
-    const user = result.user;
-
-    await setDoc(doc(db, "users", user.uid), {
-      uid: user.uid,
-      fullName: name,
-      phone: phone,
-      email: email,
-      role: "user",
-      accountStatus: "active",
-      kycStatus: "pending",
-      walletBalance: 0,
-      currency: "NGN",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-
-    showMessage("Account created successfully.");
-
-    registerForm.reset();
-
-  } catch (error) {
-    console.error("Registration error:", error);
-
-    const messages = {
-      "auth/email-already-in-use": "This email already has an account.",
-      "auth/invalid-email": "Please enter a valid email address.",
-      "auth/weak-password": "Please use a stronger password.",
-      "auth/network-request-failed": "Check your internet connection."
-    };
-
-    showMessage(
-      messages[error.code] || error.message,
-      "error"
-    );
-
-  } finally {
-    button.disabled = false;
-    button.textContent = "Create Account";
-  }
-});
-
-
-/* =====================================================
-   9. LOGIN USER
-   ===================================================== */
-
-loginForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  const email = $("loginEmail").value.trim().toLowerCase();
-  const password = $("loginPassword").value;
-
-  const button = $("loginButton");
-
-  button.disabled = true;
-  button.textContent = "Signing in...";
-
-  try {
-    await signInWithEmailAndPassword(auth, email, password);
-
-    showMessage("Welcome back to ZENTRA PAY.");
-
-    loginForm.reset();
-
-  } catch (error) {
-    console.error("Login error:", error);
-
-    const messages = {
-      "auth/invalid-credential": "Incorrect email or password.",
-      "auth/user-not-found": "Account not found.",
-      "auth/wrong-password": "Incorrect password.",
-      "auth/invalid-email": "Invalid email address.",
-      "auth/too-many-requests": "Too many attempts. Try again later.",
-      "auth/network-request-failed": "Check your internet connection."
-    };
-
-    showMessage(
-      messages[error.code] || error.message,
-      "error"
-    );
-
-  } finally {
-    button.disabled = false;
-    button.textContent = "Sign In";
-  }
-});
-
-
-/* =====================================================
-   10. FORGOT PASSWORD
-   ===================================================== */
-
-$("forgotPassword").addEventListener("click", async () => {
-  const email = $("loginEmail").value.trim().toLowerCase();
-
-  if (!email) {
-    showMessage("Enter your email address first.", "error");
-    $("loginEmail").focus();
-    return;
-  }
-
-  try {
-    await sendPasswordResetEmail(auth, email);
-
-    showMessage("Password reset instructions have been sent.");
-
-  } catch (error) {
-    console.error(error);
-
-    showMessage(
-      "Unable to send password reset email. Check the address.",
-      "error"
-    );
-  }
-});
-
-
-/* =====================================================
-   11. AUTHENTICATION STATE
-   ===================================================== */
-
-onAuthStateChanged(auth, async (user) => {
-  hideLoading();
-
-  if (user) {
-    currentUser = user;
-
-    authScreen.classList.add("hidden");
-    appScreen.classList.remove("hidden");
-
-    await loadUserProfile(user.uid);
-    listenToTransactions(user.uid);
-
-  } else {
-    currentUser = null;
-    currentUserData = {};
-
-    if (unsubscribeProfile) {
-      unsubscribeProfile();
-      unsubscribeProfile = null;
+    if (!email || !password) {
+      return notify("Enter your email and password.", "error");
     }
 
-    if (unsubscribeTransactions) {
-      unsubscribeTransactions();
-      unsubscribeTransactions = null;
+    setLoading(true);
+
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      notify("Login successful.", "success");
+    } catch (error) {
+      notify(error.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  });
+}
+
+if ($("registerForm")) {
+  $("registerForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const fullName = $("registerName")?.value.trim();
+    const phone = $("registerPhone")?.value.trim();
+    const email = $("registerEmail")?.value.trim();
+    const password = $("registerPassword")?.value;
+    const confirmPassword = $("confirmPassword")?.value;
+
+    if (!fullName || !phone || !email || !password) {
+      return notify("Complete all required fields.", "error");
     }
 
-    appScreen.classList.add("hidden");
-    authScreen.classList.remove("hidden");
-
-    showLogin();
-  }
-});
-
-
-/* =====================================================
-   12. LOAD USER PROFILE
-   ===================================================== */
-
-async function loadUserProfile(uid) {
-  try {
-    const userRef = doc(db, "users", uid);
-    const userSnap = await getDoc(userRef);
-
-    if (!userSnap.exists()) {
-      showMessage("Your account profile was not found.", "error");
-      return;
+    if (password.length < 8) {
+      return notify("Password must be at least 8 characters.", "error");
     }
 
-    currentUserData = userSnap.data();
+    if (password !== confirmPassword) {
+      return notify("Passwords do not match.", "error");
+    }
 
-    renderProfile(currentUserData);
+    if ($("termsCheck") && !$("termsCheck").checked) {
+      return notify("Please accept the terms.", "error");
+    }
 
-    if (unsubscribeProfile) unsubscribeProfile();
+    setLoading(true);
 
-    unsubscribeProfile = onSnapshot(userRef, (snapshot) => {
-      if (snapshot.exists()) {
-        currentUserData = snapshot.data();
-        renderProfile(currentUserData);
-      }
-    }, (error) => {
-      console.error("Profile listener error:", error);
-    });
+    try {
+      const result = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
 
-  } catch (error) {
-    console.error("Profile loading error:", error);
-    showMessage("Unable to load your profile.", "error");
-  }
-}
+      const uid = result.user.uid;
 
-
-/* =====================================================
-   13. RENDER PROFILE
-   ===================================================== */
-
-function renderProfile(data) {
-  const name = data.fullName || "User";
-  const email = data.email || currentUser?.email || "";
-  const phone = data.phone || "";
-  const balance = Number(data.walletBalance || 0);
-
-  $("dashboardUserName").textContent = name;
-  $("welcomeMessage").textContent = "Welcome, " + name;
-
-  $("headerAvatar").textContent =
-    name.charAt(0).toUpperCase();
-
-  $("accountStatus").textContent =
-    data.accountStatus || "Unknown";
-
-  $("kycStatus").textContent =
-    data.kycStatus || "Pending";
-
-  $("profileKycStatus").textContent =
-    data.kycStatus || "Pending";
-
-  $("profileName").value = name;
-  $("profilePhone").value = phone;
-  $("profileEmail").value = email;
-  $("profileAddress").value = data.address || "";
-
-  const dot = document.querySelector(".status-dot");
-
-  if (dot) {
-    dot.classList.toggle(
-      "online",
-      data.accountStatus === "active"
-    );
-  }
-
-  renderBalance(balance);
-}
-
-
-/* =====================================================
-   14. WALLET BALANCE
-   ===================================================== */
-
-function formatMoney(amount) {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 2
-  }).format(amount);
-}
-
-function renderBalance(amount) {
-  const formatted = formatMoney(amount);
-
-  $("walletBalance").textContent =
-    balanceVisible ? formatted : "••••••••";
-
-  $("walletPageBalance").textContent = formatted;
-}
-
-$("toggleBalance").addEventListener("click", () => {
-  balanceVisible = !balanceVisible;
-
-  renderBalance(
-    Number(currentUserData.walletBalance || 0)
-  );
-});
-
-
-/* =====================================================
-   15. PAGE NAVIGATION
-   ===================================================== */
-
-const pageNames = {
-  dashboard: "Dashboard",
-  services: "All Services",
-  service: "Service",
-  wallet: "My Wallet",
-  transactions: "Transactions",
-  profile: "My Profile",
-  settings: "Settings",
-  support: "Help & Support"
-};
-
-function navigateTo(page) {
-  const pages = document.querySelectorAll(".page");
-
-  pages.forEach(section => {
-    section.classList.remove("active-page");
-  });
-
-  const selectedPage = $(page + "Page");
-
-  if (!selectedPage) return;
-
-  selectedPage.classList.add("active-page");
-
-  $("pageTitle").textContent = pageNames[page] || "ZENTRA PAY";
-
-  document.querySelectorAll(".nav-link, .bottom-link").forEach(button => {
-    button.classList.toggle(
-      "active",
-      button.dataset.page === page
-    );
-  });
-
-  $("sidebar").classList.remove("open");
-
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-document.querySelectorAll("[data-page]").forEach(button => {
-  button.addEventListener("click", () => {
-    navigateTo(button.dataset.page);
-  });
-});
-
-
-/* =====================================================
-   16. MOBILE SIDEBAR
-   ===================================================== */
-
-$("menuToggle").addEventListener("click", () => {
-  $("sidebar").classList.toggle("open");
-});
-
-
-/* =====================================================
-   17. SERVICES CONFIGURATION
-   ===================================================== */
-
-const serviceConfig = {
-  airtime: {
-    title: "Buy Airtime",
-    description: "Recharge any supported Nigerian mobile network.",
-    fields: [
-      {
-        name: "network",
-        label: "Select Network",
-        type: "select",
-        options: ["MTN", "Airtel", "Glo", "9mobile"]
-      },
-      {
-        name: "phone",
-        label: "Phone Number",
-        type: "tel",
-        placeholder: "08012345678"
-      },
-      {
-        name: "amount",
-        label: "Amount (₦)",
-        type: "number",
-        placeholder: "Enter amount"
-      }
-    ]
-  },
-
-  data: {
-    title: "Buy Data",
-    description: "Choose your network and data bundle.",
-    fields: [
-      {
-        name: "network",
-        label: "Select Network",
-        type: "select",
-        options: ["MTN", "Airtel", "Glo", "9mobile"]
-      },
-      {
-        name: "phone",
-        label: "Phone Number",
-        type: "tel",
-        placeholder: "08012345678"
-      },
-      {
-        name: "plan",
-        label: "Data Plan",
-        type: "select",
-        options: ["Select a plan"]
-      }
-    ]
-  },
-
-  electricity: {
-    title: "Electricity Payment",
-    description: "Pay electricity bills for supported providers.",
-    fields: [
-      {
-        name: "disco",
-        label: "Electricity Provider",
-        type: "select",
-        options: [
-          "IKEDC",
-          "EKEDC",
-          "AEDC",
-          "KEDCO",
-          "JED",
-          "IBEDC",
-          "PHED",
-          "EEDC",
-          "BEDC"
-        ]
-      },
-      {
-        name: "meterType",
-        label: "Meter Type",
-        type: "select",
-        options: ["Prepaid", "Postpaid"]
-      },
-      {
-        name: "meterNumber",
-        label: "Meter Number",
-        type: "text",
-        placeholder: "Enter meter number"
-      },
-      {
-        name: "amount",
-        label: "Amount (₦)",
-        type: "number",
-        placeholder: "Enter amount"
-      }
-    ]
-  },
-
-  cable: {
-    title: "TV Subscription",
-    description: "Manage your supported TV subscription.",
-    fields: [
-      {
-        name: "provider",
-        label: "TV Provider",
-        type: "select",
-        options: ["DStv", "GOtv", "StarTimes"]
-      },
-      {
-        name: "smartcard",
-        label: "Smartcard / IUC Number",
-        type: "text",
-        placeholder: "Enter decoder number"
-      },
-      {
-        name: "plan",
-        label: "Subscription Plan",
-        type: "text",
-        placeholder: "Enter or select plan"
-      }
-    ]
-  },
-
-  education: {
-    title: "Education PINs",
-    description: "Education examination PIN services.",
-    fields: [
-      {
-        name: "exam",
-        label: "Examination",
-        type: "select",
-        options: ["WAEC", "NECO", "JAMB"]
-      },
-      {
-        name: "quantity",
-        label: "Quantity",
-        type: "number",
-        placeholder: "Enter quantity"
-      }
-    ]
-  },
-
-  internet: {
-    title: "Internet Subscription",
-    description: "Internet subscription services.",
-    fields: [
-      {
-        name: "provider",
-        label: "Internet Provider",
-        type: "text",
-        placeholder: "Enter provider"
-      },
-      {
-        name: "account",
-        label: "Account / Customer Number",
-        type: "text",
-        placeholder: "Enter account number"
-      },
-      {
-        name: "plan",
-        label: "Subscription Plan",
-        type: "text",
-        placeholder: "Enter plan"
-      }
-    ]
-  },
-
-  sms: {
-    title: "Bulk SMS",
-    description: "Prepare a bulk messaging request.",
-    fields: [
-      {
-        name: "sender",
-        label: "Sender Name",
-        type: "text",
-        placeholder: "Your sender name"
-      },
-      {
-        name: "recipients",
-        label: "Recipient Numbers",
-        type: "textarea",
-        placeholder: "Enter numbers separated by commas"
-      },
-      {
-        name: "message",
-        label: "Message",
-        type: "textarea",
-        placeholder: "Write your message"
-      }
-    ]
-  },
-
-  giftcard: {
-    title: "Gift Cards",
-    description: "Gift card services subject to provider availability.",
-    fields: [
-      {
-        name: "card",
-        label: "Gift Card Type",
-        type: "text",
-        placeholder: "Enter gift card type"
-      },
-      {
-        name: "amount",
-        label: "Card Value",
-        type: "number",
-        placeholder: "Enter value"
-      }
-    ]
-  },
-
-  voucher: {
-    title: "Vouchers",
-    description: "Voucher purchase requests.",
-    fields: [
-      {
-        name: "voucher",
-        label: "Voucher Type",
-        type: "text",
-        placeholder: "Enter voucher type"
-      },
-      {
-        name: "quantity",
-        label: "Quantity",
-        type: "number",
-        placeholder: "Enter quantity"
-      }
-    ]
-  },
-
-  schoolfees: {
-    title: "School Fees",
-    description: "School fee payment requests.",
-    fields: [
-      {
-        name: "school",
-        label: "School Name",
-        type: "text",
-        placeholder: "Enter school name"
-      },
-      {
-        name: "student",
-        label: "Student Reference",
-        type: "text",
-        placeholder: "Enter student reference"
-      },
-      {
-        name: "amount",
-        label: "Amount (₦)",
-        type: "number",
-        placeholder: "Enter amount"
-      }
-    ]
-  }
-};
-
-
-/* =====================================================
-   18. SERVICE FORM BUILDER
-   ===================================================== */
-
-function openService(serviceKey) {
-  const config = serviceConfig[serviceKey];
-
-  if (!config) {
-    showMessage("This service is not available.", "error");
-    return;
-  }
-
-  currentService = serviceKey;
-
-  $("serviceTitle").textContent = config.title;
-  $("serviceDescription").textContent = config.description;
-
-  const fieldsContainer = $("serviceFields");
-  fieldsContainer.innerHTML = "";
-
-  config.fields.forEach(field => {
-    const label = document.createElement("label");
-    label.textContent = field.label;
-    label.htmlFor = "service_" + field.name;
-
-    let input;
-
-    if (field.type === "select") {
-      input = document.createElement("select");
-
-      field.options.forEach(option => {
-        const item = document.createElement("option");
-        item.value = option;
-        item.textContent = option;
-        input.appendChild(item);
+      await setDoc(doc(db, "users", uid), {
+        uid,
+        fullName,
+        phone,
+        email,
+        role: "user",
+        accountStatus: "active",
+        kycStatus: "pending",
+        walletBalance: 0,
+        currency: "NGN",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
 
-    } else if (field.type === "textarea") {
-      input = document.createElement("textarea");
-      input.rows = 3;
+      notify("Account created successfully.", "success");
+    } catch (error) {
+      notify(error.message, "error");
 
-    } else {
-      input = document.createElement("input");
-      input.type = field.type;
+      if (auth.currentUser) {
+        await signOut(auth);
+      }
+    } finally {
+      setLoading(false);
     }
-
-    input.id = "service_" + field.name;
-    input.name = field.name;
-    input.placeholder = field.placeholder || "";
-    input.required = true;
-
-    if (field.type === "number") {
-      input.min = "1";
-    }
-
-    fieldsContainer.appendChild(label);
-    fieldsContainer.appendChild(input);
   });
-
-  $("serviceSubmit").textContent = "Continue";
-
-  navigateTo("service");
 }
 
-document.querySelectorAll("[data-service]").forEach(button => {
-  button.addEventListener("click", () => {
-    openService(button.dataset.service);
+if ($("forgotPassword")) {
+  $("forgotPassword").addEventListener("click", async () => {
+    const email = $("loginEmail")?.value.trim();
+
+    if (!email) {
+      return notify("Enter your email address first.", "error");
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      notify("Password reset email sent.", "success");
+    } catch (error) {
+      notify(error.message, "error");
+    }
   });
-});
+}
 
+async function logout() {
+  try {
+    await signOut(auth);
+    notify("You have signed out.", "success");
+  } catch (error) {
+    notify(error.message, "error");
+  }
+}
 
-/* =====================================================
-   19. SERVICE SUBMISSION
-   ===================================================== */
+// ==========================================
+// 6. USER PROFILE
+// ==========================================
 
-$("serviceForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
+function listenToProfile(uid) {
+  if (unsubscribeProfile) unsubscribeProfile();
 
-  if (!currentUser) {
-    showMessage("Please sign in first.", "error");
-    return;
+  unsubscribeProfile = onSnapshot(
+    doc(db, "users", uid),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        notify("User profile not found.", "error");
+        return;
+      }
+
+      currentProfile = snapshot.data();
+      renderProfile();
+    },
+    (error) => notify(error.message, "error")
+  );
+}
+
+function renderProfile() {
+  if (!currentProfile) return;
+
+  const name = currentProfile.fullName || "ZENTRA PAY User";
+  const phone = currentProfile.phone || "";
+  const email = currentProfile.email || "";
+
+  if ($("dashboardUserName")) {
+    $("dashboardUserName").textContent = name;
   }
 
-  const config = serviceConfig[currentService];
+  if ($("welcomeMessage")) {
+    $("welcomeMessage").textContent = `Welcome, ${name}`;
+  }
 
-  if (!config) return;
+  if ($("profileName")) $("profileName").value = name;
+  if ($("profilePhone")) $("profilePhone").value = phone;
+  if ($("profileEmail")) $("profileEmail").value = email;
 
-  const details = {};
+  if ($("headerAvatar")) {
+    $("headerAvatar").textContent = name.charAt(0).toUpperCase();
+  }
 
-  config.fields.forEach(field => {
-    const element = $("service_" + field.name);
-    details[field.name] = element.value.trim();
+  if ($("accountStatus")) {
+    $("accountStatus").textContent =
+      currentProfile.accountStatus || "active";
+  }
+
+  if ($("kycStatus")) {
+    $("kycStatus").textContent =
+      currentProfile.kycStatus || "pending";
+  }
+
+  if ($("profileKycStatus")) {
+    $("profileKycStatus").textContent =
+      currentProfile.kycStatus || "pending";
+  }
+
+  renderBalance();
+}
+
+function renderBalance() {
+  const balance = money(currentProfile?.walletBalance || 0);
+  const displayed = balanceVisible ? balance : "••••••";
+
+  if ($("walletBalance")) $("walletBalance").textContent = displayed;
+  if ($("walletPageBalance")) {
+    $("walletPageBalance").textContent = displayed;
+  }
+}
+
+if ($("toggleBalance")) {
+  $("toggleBalance").addEventListener("click", () => {
+    balanceVisible = !balanceVisible;
+    renderBalance();
   });
+}
 
-  const amount = Number(details.amount || 0);
+if ($("profileForm")) {
+  $("profileForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
 
-  if (amount < 0 || !Number.isFinite(amount)) {
-    showMessage("Please enter a valid amount.", "error");
-    return;
-  }
+    if (!currentUser) return;
 
-  showModal(
-    "Service Request Prepared",
-    "Your " + config.title +
-    " details have been collected. Live purchases will be enabled after the secure VTUGATE backend is connected. No payment has been made."
-  );
-});
+    const fullName = $("profileName")?.value.trim();
+    const phone = $("profilePhone")?.value.trim();
+    const address = $("profileAddress")?.value.trim();
 
+    if (!fullName || !phone || !address) {
+      return notify("Complete your profile details.", "error");
+    }
 
-/* =====================================================
-   20. FUND WALLET
-   ===================================================== */
+    try {
+      await updateDoc(doc(db, "users", currentUser.uid), {
+        fullName,
+        phone,
+        address,
+        updatedAt: serverTimestamp()
+      });
 
-$("fundWalletForm").addEventListener("submit", (event) => {
-  event.preventDefault();
+      notify("Profile updated.", "success");
+    } catch (error) {
+      notify(error.message, "error");
+    }
+  });
+}
 
-  const amount = Number($("fundAmount").value);
-
-  if (!Number.isFinite(amount) || amount < 100) {
-    showMessage("Minimum funding amount is ₦100.", "error");
-    return;
-  }
-
-  const method = document.querySelector(
-    'input[name="paymentMethod"]:checked'
-  )?.value;
-
-  showModal(
-    "Wallet Funding",
-    "Funding request for " + formatMoney(amount) +
-    " using " + (method || "selected payment method") +
-    ". Secure payment processing will be enabled after OPay/payment backend configuration. Your wallet has not been credited."
-  );
-});
-
-
-/* =====================================================
-   21. TRANSACTION HISTORY
-   ===================================================== */
+// ==========================================
+// 7. TRANSACTIONS
+// ==========================================
 
 function listenToTransactions(uid) {
-  if (unsubscribeTransactions) {
-    unsubscribeTransactions();
-  }
+  if (unsubscribeTransactions) unsubscribeTransactions();
 
-  const transactionsRef = collection(
-    db,
-    "users",
-    uid,
-    "transactions"
-  );
-
-  const transactionQuery = query(
-    transactionsRef,
-    orderBy("createdAt", "desc"),
-    limit(30)
+  const transactionsQuery = query(
+    collection(db, "users", uid, "transactions"),
+    orderBy("createdAt", "desc")
   );
 
   unsubscribeTransactions = onSnapshot(
-    transactionQuery,
+    transactionsQuery,
     (snapshot) => {
-      renderTransactions(snapshot.docs.map(item => ({
+      cachedTransactions = snapshot.docs.map((item) => ({
         id: item.id,
         ...item.data()
-      })));
+      }));
+
+      renderTransactions(cachedTransactions);
     },
-    (error) => {
-      console.error("Transaction listener:", error);
-      $("transactionList").innerHTML =
-        '<div class="empty-state"><strong>Unable to load transactions</strong><p>Please try again later.</p></div>';
-    }
+    (error) => notify(error.message, "error")
   );
 }
-
 
 function renderTransactions(items) {
   const container = $("transactionList");
 
+  if (!container) return;
+
   if (!items.length) {
     container.innerHTML = `
       <div class="empty-state">
-        <span>↔</span>
-        <strong>No transactions found</strong>
-        <p>Your payment records will appear here.</p>
+        <p>No transactions found.</p>
       </div>
     `;
     return;
   }
 
-  container.innerHTML = "";
-
-  items.forEach(item => {
-    const row = document.createElement("div");
-    row.style.cssText =
-      "display:flex;justify-content:space-between;gap:12px;padding:17px;border-bottom:1px solid #eee;align-items:center;";
-
-    const left = document.createElement("div");
-
-    const title = document.createElement("strong");
-    title.textContent = item.description || item.service || "Transaction";
-    title.style.cssText = "display:block;font-size:12px;";
-
-    const date = document.createElement("small");
-    date.textContent = item.createdAt?.toDate
-      ? item.createdAt.toDate().toLocaleString()
-      : "Date unavailable";
-    date.style.cssText = "display:block;color:#999;font-size:10px;margin-top:6px;";
-
-    left.append(title, date);
-
-    const right = document.createElement("div");
-    right.style.textAlign = "right";
-
-    const amount = document.createElement("strong");
-    amount.textContent = formatMoney(Number(item.amount || 0));
-    amount.style.cssText = "display:block;font-size:12px;";
-
-    const status = document.createElement("small");
-    status.textContent = item.status || "pending";
-    status.style.cssText = "display:block;color:#888;font-size:10px;margin-top:6px;";
-
-    right.append(amount, status);
-    row.append(left, right);
-
-    container.appendChild(row);
-  });
+  container.innerHTML = items.map((item) => `
+    <div class="transaction-item">
+      <div class="transaction-info">
+        <strong>${safeText(item.service)}</strong>
+        <small>${safeText(item.reference)}</small>
+      </div>
+      <div class="transaction-details">
+        <strong>${money(item.amount)}</strong>
+        <small>${safeText(item.status)}</small>
+      </div>
+    </div>
+  `).join("");
 }
 
-
-/* =====================================================
-   22. TRANSACTION SEARCH AND FILTER
-   ===================================================== */
-
-$("transactionSearch").addEventListener("input", () => {
-  filterTransactions();
-});
-
-$("transactionFilter").addEventListener("change", () => {
-  filterTransactions();
-});
-
-let cachedTransactions = [];
-
 function filterTransactions() {
-  const search = $("transactionSearch").value.toLowerCase();
-  const filter = $("transactionFilter").value;
+  const search = ($("transactionSearch")?.value || "").toLowerCase();
+  const filter = $("transactionFilter")?.value || "all";
 
-  const filtered = cachedTransactions.filter(item => {
-    const title = (
-      item.description || item.service || ""
-    ).toLowerCase();
+  const filtered = cachedTransactions.filter((item) => {
+    const matchesSearch =
+      String(item.service || "").toLowerCase().includes(search) ||
+      String(item.reference || "").toLowerCase().includes(search);
 
-    const matchesSearch = title.includes(search);
     const matchesStatus =
-      filter === "all" ||
-      String(item.status || "").toLowerCase() === filter;
+      filter === "all" || item.status === filter;
 
     return matchesSearch && matchesStatus;
   });
@@ -1042,190 +473,300 @@ function filterTransactions() {
   renderTransactions(filtered);
 }
 
-
-/* =====================================================
-   23. SAVE PROFILE
-   ===================================================== */
-
-$("profileForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  if (!currentUser) return;
-
-  const name = $("profileName").value.trim();
-  const phone = $("profilePhone").value.trim();
-  const address = $("profileAddress").value.trim();
-
-  if (!name || !phone) {
-    showMessage("Name and phone number are required.", "error");
-    return;
-  }
-
-  try {
-    await updateDoc(doc(db, "users", currentUser.uid), {
-      fullName: name,
-      phone: phone,
-      address: address,
-      updatedAt: serverTimestamp()
-    });
-
-    showMessage("Profile updated successfully.");
-
-  } catch (error) {
-    console.error("Profile update:", error);
-    showMessage("Unable to update profile.", "error");
-  }
-});
-
-
-/* =====================================================
-   24. CHANGE PASSWORD
-   ===================================================== */
-
-$("changePasswordButton").addEventListener("click", async () => {
-  if (!currentUser) return;
-
-  const newPassword = prompt(
-    "Enter your new password (at least 8 characters):"
-  );
-
-  if (!newPassword) return;
-
-  if (newPassword.length < 8) {
-    showMessage("Password must contain at least 8 characters.", "error");
-    return;
-  }
-
-  try {
-    await updatePassword(currentUser, newPassword);
-    showMessage("Password updated successfully.");
-
-  } catch (error) {
-    console.error("Password update:", error);
-
-    showMessage(
-      "Please sign in again before changing your password.",
-      "error"
-    );
-  }
-});
-
-
-/* =====================================================
-   25. SUPPORT REQUEST
-   ===================================================== */
-
-$("supportForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  if (!currentUser) return;
-
-  const subject = $("supportSubject").value.trim();
-  const message = $("supportMessage").value.trim();
-
-  if (!subject || !message) {
-    showMessage("Please complete the support form.", "error");
-    return;
-  }
-
-  try {
-    await addDoc(collection(db, "supportTickets"), {
-      uid: currentUser.uid,
-      email: currentUser.email || "",
-      subject,
-      message,
-      status: "open",
-      createdAt: serverTimestamp()
-    });
-
-    $("supportForm").reset();
-
-    showMessage("Your support request has been submitted.");
-
-  } catch (error) {
-    console.error("Support request:", error);
-    showMessage("Unable to submit your request.", "error");
-  }
-});
-
-
-/* =====================================================
-   26. MODAL SYSTEM
-   ===================================================== */
-
-function showModal(title, message) {
-  $("modalContent").innerHTML = "";
-
-  const heading = document.createElement("h2");
-  heading.textContent = title;
-  heading.style.cssText = "font-size:19px;margin-bottom:12px;";
-
-  const paragraph = document.createElement("p");
-  paragraph.textContent = message;
-  paragraph.style.cssText =
-    "font-size:12px;line-height:1.8;color:#777;";
-
-  $("modalContent").append(heading, paragraph);
-
-  $("appModal").classList.remove("hidden");
+if ($("transactionSearch")) {
+  $("transactionSearch").addEventListener("input", filterTransactions);
 }
 
-$("closeModal").addEventListener("click", () => {
-  $("appModal").classList.add("hidden");
-});
+if ($("transactionFilter")) {
+  $("transactionFilter").addEventListener("change", filterTransactions);
+}
 
-$("appModal").addEventListener("click", (event) => {
-  if (event.target === $("appModal")) {
-    $("appModal").classList.add("hidden");
+// ==========================================
+// 8. SERVICES
+// ==========================================
+
+function openService(service) {
+  selectedService = service;
+
+  if ($("pageTitle")) {
+    $("pageTitle").textContent =
+      service.charAt(0).toUpperCase() + service.slice(1);
   }
-});
 
+  showPage("service");
+  buildServiceForm(service);
+}
 
-/* =====================================================
-   27. LOGOUT
-   ===================================================== */
+function buildServiceForm(service) {
+  const container = $("serviceFormContainer");
 
-$("logoutButton").addEventListener("click", async () => {
-  const confirmed = confirm("Are you sure you want to sign out?");
+  if (!container) {
+    notify("Service form container is missing from index.html.", "error");
+    return;
+  }
 
-  if (!confirmed) return;
+  container.innerHTML = `
+    <form id="newServiceForm" class="service-form">
+      <label>Service</label>
+      <input value="${safeText(service)}" disabled>
+
+      <label>Customer reference / phone number</label>
+      <input id="serviceReference"
+        type="text"
+        maxlength="100"
+        required
+        placeholder="Enter your reference">
+
+      <label>Amount (NGN)</label>
+      <input id="serviceAmount"
+        type="number"
+        min="1"
+        max="1000000"
+        step="0.01"
+        required
+        placeholder="Enter amount">
+
+      <button type="submit">Submit Request</button>
+    </form>
+  `;
+
+  $("newServiceForm").addEventListener("submit", submitServiceRequest);
+}
+
+async function submitServiceRequest(event) {
+  event.preventDefault();
+
+  if (!currentUser) {
+    return notify("Please sign in first.", "error");
+  }
+
+  const reference = $("serviceReference")?.value.trim();
+  const amount = Number($("serviceAmount")?.value);
+
+  if (!reference || !Number.isFinite(amount) || amount <= 0) {
+    return notify("Enter valid transaction details.", "error");
+  }
 
   try {
-    await signOut(auth);
-    showMessage("You have signed out.");
+    setLoading(true);
 
+    const result = await createTransactionRequest({
+      service: selectedService,
+      reference,
+      amount
+    });
+
+    notify(
+      `Request created: ${result.data.transactionId}`,
+      "success"
+    );
+
+    showPage("transactions");
   } catch (error) {
-    console.error(error);
-    showMessage("Unable to sign out.", "error");
+    notify(error.message, "error");
+  } finally {
+    setLoading(false);
   }
+}
+
+// ==========================================
+// 9. WALLET FUNDING
+// ==========================================
+
+function renderWalletInformation() {
+  const container = $("virtualAccounts");
+
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="empty-state">
+      <p>Wallet funding is not connected yet.</p>
+      <p>Verified payment instructions will appear here after backend integration.</p>
+    </div>
+  `;
+}
+
+// ==========================================
+// 10. ADMIN FUNCTIONS
+// ==========================================
+
+async function adminReview(customerUid, transactionId, decision) {
+  try {
+    setLoading(true);
+
+    await reviewTransaction({
+      customerUid,
+      transactionId,
+      decision
+    });
+
+    notify("Transaction review completed.", "success");
+  } catch (error) {
+    notify(error.message, "error");
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function adminGetWallet(customerUid) {
+  try {
+    const result = await getCustomerWallet({ customerUid });
+    return result.data;
+  } catch (error) {
+    notify(error.message, "error");
+    return null;
+  }
+}
+
+// ==========================================
+// 11. NAVIGATION
+// ==========================================
+
+function showPage(page) {
+  activePage = page;
+
+  const pages = [
+    "dashboard",
+    "services",
+    "service",
+    "wallet",
+    "transactions",
+    "profile",
+    "settings",
+    "support"
+  ];
+
+  pages.forEach((name) => {
+    const element = $(`${name}Page`);
+    if (element) {
+      element.style.display = name === page ? "block" : "none";
+    }
+  });
+
+  if ($("pageTitle")) {
+    $("pageTitle").textContent =
+      page.charAt(0).toUpperCase() + page.slice(1);
+  }
+
+  document.querySelectorAll("[data-page]").forEach((button) => {
+    button.classList.toggle(
+      "active",
+      button.dataset.page === page
+    );
+  });
+
+  if (page === "wallet") renderWalletInformation();
+}
+
+document.querySelectorAll("[data-page]").forEach((button) => {
+  button.addEventListener("click", () => {
+    showPage(button.dataset.page);
+  });
 });
 
-
-/* =====================================================
-   28. NOTIFICATIONS BUTTON
-   ===================================================== */
-
-$("notificationButton").addEventListener("click", () => {
-  showModal(
-    "Notifications",
-    "Your account notifications will appear here."
-  );
+document.querySelectorAll("[data-service]").forEach((button) => {
+  button.addEventListener("click", () => {
+    openService(button.dataset.service);
+  });
 });
 
+if ($("menuToggle")) {
+  $("menuToggle").addEventListener("click", () => {
+    $("sidebar")?.classList.toggle("open");
+  });
+}
 
-/* =====================================================
-   29. CURRENT YEAR
-   ===================================================== */
+// ==========================================
+// 12. SUPPORT
+// ==========================================
 
-$("currentYear").textContent = new Date().getFullYear();
+if ($("supportForm")) {
+  $("supportForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
 
+    if (!currentUser) return;
 
-/* =====================================================
-   30. INITIAL PAGE
-   ===================================================== */
+    const subject = $("supportSubject")?.value.trim();
+    const message = $("supportMessage")?.value.trim();
 
-navigateTo("dashboard");
+    if (!subject || !message) {
+      return notify("Complete all support fields.", "error");
+    }
 
-setTimeout(() => {
-  hideLoading();
-}, 7000);
+    try {
+      await addDoc(collection(db, "supportTickets"), {
+        uid: currentUser.uid,
+        email: currentUser.email || "",
+        subject,
+        message,
+        status: "open",
+        createdAt: serverTimestamp()
+      });
+
+      $("supportForm").reset();
+      notify("Support request submitted.", "success");
+    } catch (error) {
+      notify(error.message, "error");
+    }
+  });
+}
+
+// ==========================================
+// 13. MODAL
+// ==========================================
+
+if ($("closeModal")) {
+  $("closeModal").addEventListener("click", () => {
+    $("appModal")?.classList.remove("show");
+  });
+}
+
+// ==========================================
+// 14. AUTH STATE
+// ==========================================
+
+onAuthStateChanged(auth, async (user) => {
+  setLoading(true);
+
+  currentUser = user;
+  currentProfile = null;
+  cachedTransactions = [];
+
+  if (!user) {
+    if (unsubscribeProfile) unsubscribeProfile();
+    if (unsubscribeTransactions) unsubscribeTransactions();
+
+    unsubscribeProfile = null;
+    unsubscribeTransactions = null;
+
+    showApplication(false);
+    setLoading(false);
+    return;
+  }
+
+  showApplication(true);
+
+  listenToProfile(user.uid);
+  listenToTransactions(user.uid);
+
+  if ($("currentYear")) {
+    $("currentYear").textContent = new Date().getFullYear();
+  }
+
+  showPage("dashboard");
+  setLoading(false);
+});
+
+// ==========================================
+// 15. GLOBAL BUTTON SUPPORT
+// ==========================================
+
+window.zentraPay = {
+  logout,
+  showPage,
+  openService,
+  adminReview,
+  adminGetWallet
+};
+
+console.log("ZENTRA PAY initialized successfully.");
