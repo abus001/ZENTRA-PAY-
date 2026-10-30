@@ -1,1026 +1,1231 @@
-/* ==========================================
+
+/* =====================================================
    ZENTRA PAY
-   Zebra Digital Payment Application
-   JavaScript - Demo Version
-   ========================================== */
+   Main Application Script
+   Firebase Authentication + Cloud Firestore
+   ===================================================== */
 
-"use strict";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
 
-// ==========================================
-// CONFIGURATION
-// ==========================================
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+  sendPasswordResetEmail,
+  updatePassword
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 
-const APP_NAME = "ZENTRA PAY";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  addDoc,
+  onSnapshot,
+  query,
+  orderBy,
+  limit,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
-const DEFAULT_BALANCE = 0;
 
-let walletBalance = DEFAULT_BALANCE;
+/* =====================================================
+   1. FIREBASE CONFIGURATION
+   ===================================================== */
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAnOkETG5voBPvRCaFO7ZklOOV4odMux64",
+  authDomain: "zentra-pays.firebaseapp.com",
+  projectId: "zentra-pays",
+  storageBucket: "zentra-pays.firebasestorage.app",
+  messagingSenderId: "143106553125",
+  appId: "1:143106553125:web:4a0b40407ecd67fb9d96cc"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+
+
+/* =====================================================
+   2. GLOBAL VARIABLES
+   ===================================================== */
+
+let currentUser = null;
+let currentUserData = {};
 let balanceVisible = true;
-let currentPage = "home";
 let currentService = "";
-let transactions = [];
+let unsubscribeProfile = null;
+let unsubscribeTransactions = null;
+
+
+/* =====================================================
+   3. HTML ELEMENTS
+   ===================================================== */
 
 const $ = (id) => document.getElementById(id);
 
-// ==========================================
-// SERVICE CONFIGURATION
-// ==========================================
+const loadingScreen = $("loadingScreen");
+const authScreen = $("authScreen");
+const appScreen = $("appScreen");
+
+const loginForm = $("loginForm");
+const registerForm = $("registerForm");
+
+const loginTab = $("loginTab");
+const registerTab = $("registerTab");
+
+const notification = $("notification");
+
+
+/* =====================================================
+   4. NOTIFICATION SYSTEM
+   ===================================================== */
+
+function showMessage(message, type = "success") {
+  notification.textContent = message;
+  notification.className = "notification show " + type;
+
+  setTimeout(() => {
+    notification.className = "notification";
+  }, 3500);
+}
+
+
+/* =====================================================
+   5. LOADING SCREEN
+   ===================================================== */
+
+function hideLoading() {
+  if (loadingScreen) {
+    loadingScreen.classList.add("hidden");
+  }
+}
+
+
+/* =====================================================
+   6. AUTHENTICATION TABS
+   ===================================================== */
+
+function showLogin() {
+  loginForm.classList.remove("hidden");
+  registerForm.classList.add("hidden");
+
+  loginTab.classList.add("active");
+  registerTab.classList.remove("active");
+
+  $("authTitle").textContent = "Welcome Back";
+  $("authSubtitle").textContent =
+    "Sign in to continue to your account";
+}
+
+function showRegister() {
+  registerForm.classList.remove("hidden");
+  loginForm.classList.add("hidden");
+
+  registerTab.classList.add("active");
+  loginTab.classList.remove("active");
+
+  $("authTitle").textContent = "Create Account";
+  $("authSubtitle").textContent =
+    "Join ZENTRA PAY today";
+}
+
+loginTab.addEventListener("click", showLogin);
+registerTab.addEventListener("click", showRegister);
+
+
+/* =====================================================
+   7. PASSWORD VISIBILITY
+   ===================================================== */
+
+document.querySelectorAll(".password-toggle").forEach(button => {
+  button.addEventListener("click", () => {
+    const input = $(button.dataset.toggle);
+
+    if (!input) return;
+
+    const hidden = input.type === "password";
+
+    input.type = hidden ? "text" : "password";
+    button.textContent = hidden ? "Hide" : "Show";
+  });
+});
+
+
+/* =====================================================
+   8. REGISTER USER
+   ===================================================== */
+
+registerForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const name = $("registerName").value.trim();
+  const phone = $("registerPhone").value.trim();
+  const email = $("registerEmail").value.trim().toLowerCase();
+  const password = $("registerPassword").value;
+  const confirmPassword = $("confirmPassword").value;
+  const terms = $("termsCheck").checked;
+
+  if (!name || !phone || !email || !password) {
+    showMessage("Please complete all required fields.", "error");
+    return;
+  }
+
+  if (password.length < 8) {
+    showMessage("Password must contain at least 8 characters.", "error");
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    showMessage("Passwords do not match.", "error");
+    return;
+  }
+
+  if (!terms) {
+    showMessage("Please accept the terms and conditions.", "error");
+    return;
+  }
+
+  const button = $("registerButton");
+  button.disabled = true;
+  button.textContent = "Creating account...";
+
+  try {
+    const result = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+
+    const user = result.user;
+
+    await setDoc(doc(db, "users", user.uid), {
+      uid: user.uid,
+      fullName: name,
+      phone: phone,
+      email: email,
+      role: "user",
+      accountStatus: "active",
+      kycStatus: "pending",
+      walletBalance: 0,
+      currency: "NGN",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    showMessage("Account created successfully.");
+
+    registerForm.reset();
+
+  } catch (error) {
+    console.error("Registration error:", error);
+
+    const messages = {
+      "auth/email-already-in-use": "This email already has an account.",
+      "auth/invalid-email": "Please enter a valid email address.",
+      "auth/weak-password": "Please use a stronger password.",
+      "auth/network-request-failed": "Check your internet connection."
+    };
+
+    showMessage(
+      messages[error.code] || error.message,
+      "error"
+    );
+
+  } finally {
+    button.disabled = false;
+    button.textContent = "Create Account";
+  }
+});
+
+
+/* =====================================================
+   9. LOGIN USER
+   ===================================================== */
+
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const email = $("loginEmail").value.trim().toLowerCase();
+  const password = $("loginPassword").value;
+
+  const button = $("loginButton");
+
+  button.disabled = true;
+  button.textContent = "Signing in...";
+
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+
+    showMessage("Welcome back to ZENTRA PAY.");
+
+    loginForm.reset();
+
+  } catch (error) {
+    console.error("Login error:", error);
+
+    const messages = {
+      "auth/invalid-credential": "Incorrect email or password.",
+      "auth/user-not-found": "Account not found.",
+      "auth/wrong-password": "Incorrect password.",
+      "auth/invalid-email": "Invalid email address.",
+      "auth/too-many-requests": "Too many attempts. Try again later.",
+      "auth/network-request-failed": "Check your internet connection."
+    };
+
+    showMessage(
+      messages[error.code] || error.message,
+      "error"
+    );
+
+  } finally {
+    button.disabled = false;
+    button.textContent = "Sign In";
+  }
+});
+
+
+/* =====================================================
+   10. FORGOT PASSWORD
+   ===================================================== */
+
+$("forgotPassword").addEventListener("click", async () => {
+  const email = $("loginEmail").value.trim().toLowerCase();
+
+  if (!email) {
+    showMessage("Enter your email address first.", "error");
+    $("loginEmail").focus();
+    return;
+  }
+
+  try {
+    await sendPasswordResetEmail(auth, email);
+
+    showMessage("Password reset instructions have been sent.");
+
+  } catch (error) {
+    console.error(error);
+
+    showMessage(
+      "Unable to send password reset email. Check the address.",
+      "error"
+    );
+  }
+});
+
+
+/* =====================================================
+   11. AUTHENTICATION STATE
+   ===================================================== */
+
+onAuthStateChanged(auth, async (user) => {
+  hideLoading();
+
+  if (user) {
+    currentUser = user;
+
+    authScreen.classList.add("hidden");
+    appScreen.classList.remove("hidden");
+
+    await loadUserProfile(user.uid);
+    listenToTransactions(user.uid);
+
+  } else {
+    currentUser = null;
+    currentUserData = {};
+
+    if (unsubscribeProfile) {
+      unsubscribeProfile();
+      unsubscribeProfile = null;
+    }
+
+    if (unsubscribeTransactions) {
+      unsubscribeTransactions();
+      unsubscribeTransactions = null;
+    }
+
+    appScreen.classList.add("hidden");
+    authScreen.classList.remove("hidden");
+
+    showLogin();
+  }
+});
+
+
+/* =====================================================
+   12. LOAD USER PROFILE
+   ===================================================== */
+
+async function loadUserProfile(uid) {
+  try {
+    const userRef = doc(db, "users", uid);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) {
+      showMessage("Your account profile was not found.", "error");
+      return;
+    }
+
+    currentUserData = userSnap.data();
+
+    renderProfile(currentUserData);
+
+    if (unsubscribeProfile) unsubscribeProfile();
+
+    unsubscribeProfile = onSnapshot(userRef, (snapshot) => {
+      if (snapshot.exists()) {
+        currentUserData = snapshot.data();
+        renderProfile(currentUserData);
+      }
+    }, (error) => {
+      console.error("Profile listener error:", error);
+    });
+
+  } catch (error) {
+    console.error("Profile loading error:", error);
+    showMessage("Unable to load your profile.", "error");
+  }
+}
+
+
+/* =====================================================
+   13. RENDER PROFILE
+   ===================================================== */
+
+function renderProfile(data) {
+  const name = data.fullName || "User";
+  const email = data.email || currentUser?.email || "";
+  const phone = data.phone || "";
+  const balance = Number(data.walletBalance || 0);
+
+  $("dashboardUserName").textContent = name;
+  $("welcomeMessage").textContent = "Welcome, " + name;
+
+  $("headerAvatar").textContent =
+    name.charAt(0).toUpperCase();
+
+  $("accountStatus").textContent =
+    data.accountStatus || "Unknown";
+
+  $("kycStatus").textContent =
+    data.kycStatus || "Pending";
+
+  $("profileKycStatus").textContent =
+    data.kycStatus || "Pending";
+
+  $("profileName").value = name;
+  $("profilePhone").value = phone;
+  $("profileEmail").value = email;
+  $("profileAddress").value = data.address || "";
+
+  const dot = document.querySelector(".status-dot");
+
+  if (dot) {
+    dot.classList.toggle(
+      "online",
+      data.accountStatus === "active"
+    );
+  }
+
+  renderBalance(balance);
+}
+
+
+/* =====================================================
+   14. WALLET BALANCE
+   ===================================================== */
+
+function formatMoney(amount) {
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    minimumFractionDigits: 2
+  }).format(amount);
+}
+
+function renderBalance(amount) {
+  const formatted = formatMoney(amount);
+
+  $("walletBalance").textContent =
+    balanceVisible ? formatted : "••••••••";
+
+  $("walletPageBalance").textContent = formatted;
+}
+
+$("toggleBalance").addEventListener("click", () => {
+  balanceVisible = !balanceVisible;
+
+  renderBalance(
+    Number(currentUserData.walletBalance || 0)
+  );
+});
+
+
+/* =====================================================
+   15. PAGE NAVIGATION
+   ===================================================== */
+
+const pageNames = {
+  dashboard: "Dashboard",
+  services: "All Services",
+  service: "Service",
+  wallet: "My Wallet",
+  transactions: "Transactions",
+  profile: "My Profile",
+  settings: "Settings",
+  support: "Help & Support"
+};
+
+function navigateTo(page) {
+  const pages = document.querySelectorAll(".page");
+
+  pages.forEach(section => {
+    section.classList.remove("active-page");
+  });
+
+  const selectedPage = $(page + "Page");
+
+  if (!selectedPage) return;
+
+  selectedPage.classList.add("active-page");
+
+  $("pageTitle").textContent = pageNames[page] || "ZENTRA PAY";
+
+  document.querySelectorAll(".nav-link, .bottom-link").forEach(button => {
+    button.classList.toggle(
+      "active",
+      button.dataset.page === page
+    );
+  });
+
+  $("sidebar").classList.remove("open");
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+document.querySelectorAll("[data-page]").forEach(button => {
+  button.addEventListener("click", () => {
+    navigateTo(button.dataset.page);
+  });
+});
+
+
+/* =====================================================
+   16. MOBILE SIDEBAR
+   ===================================================== */
+
+$("menuToggle").addEventListener("click", () => {
+  $("sidebar").classList.toggle("open");
+});
+
+
+/* =====================================================
+   17. SERVICES CONFIGURATION
+   ===================================================== */
 
 const serviceConfig = {
   airtime: {
     title: "Buy Airtime",
-    description: "Recharge your mobile phone",
-    icon: "fa-mobile-screen-button",
+    description: "Recharge any supported Nigerian mobile network.",
     fields: [
       {
         name: "network",
         label: "Select Network",
         type: "select",
-        required: true,
-        options: [
-          ["", "Choose Network"],
-          ["MTN", "MTN"],
-          ["Airtel", "Airtel"],
-          ["Glo", "Glo"],
-          ["9mobile", "9mobile"]
-        ]
+        options: ["MTN", "Airtel", "Glo", "9mobile"]
       },
       {
         name: "phone",
         label: "Phone Number",
         type: "tel",
-        placeholder: "08012345678",
-        required: true
+        placeholder: "08012345678"
       },
       {
         name: "amount",
         label: "Amount (₦)",
         type: "number",
-        placeholder: "Enter amount",
-        min: 50,
-        required: true
+        placeholder: "Enter amount"
       }
     ]
   },
 
   data: {
     title: "Buy Data",
-    description: "Purchase a mobile data bundle",
-    icon: "fa-wifi",
+    description: "Choose your network and data bundle.",
     fields: [
       {
         name: "network",
         label: "Select Network",
         type: "select",
-        required: true,
-        options: [
-          ["", "Choose Network"],
-          ["MTN", "MTN"],
-          ["Airtel", "Airtel"],
-          ["Glo", "Glo"],
-          ["9mobile", "9mobile"]
-        ]
+        options: ["MTN", "Airtel", "Glo", "9mobile"]
       },
       {
         name: "phone",
         label: "Phone Number",
         type: "tel",
-        placeholder: "08012345678",
-        required: true
+        placeholder: "08012345678"
       },
       {
         name: "plan",
         label: "Data Plan",
         type: "select",
-        required: true,
-        options: [
-          ["", "Select Data Plan"],
-          ["100MB", "100MB"],
-          ["500MB", "500MB"],
-          ["1GB", "1GB"],
-          ["2GB", "2GB"],
-          ["5GB", "5GB"],
-          ["10GB", "10GB"]
-        ]
-      },
-      {
-        name: "amount",
-        label: "Amount (₦)",
-        type: "number",
-        placeholder: "Enter price",
-        min: 1,
-        required: true
+        options: ["Select a plan"]
       }
     ]
   },
 
   electricity: {
-    title: "Electricity Bills",
-    description: "Pay your electricity bill",
-    icon: "fa-bolt",
+    title: "Electricity Payment",
+    description: "Pay electricity bills for supported providers.",
     fields: [
       {
         name: "disco",
         label: "Electricity Provider",
         type: "select",
-        required: true,
         options: [
-          ["", "Select Provider"],
-          ["AEDC", "AEDC"],
-          ["IKEDC", "IKEDC"],
-          ["EKEDC", "EKEDC"],
-          ["KEDCO", "KEDCO"],
-          ["IBEDC", "IBEDC"],
-          ["PHED", "PHED"],
-          ["BEDC", "BEDC"],
-          ["KAEDCO", "KAEDCO"],
-          ["JED", "JED"],
-          ["EEDC", "EEDC"]
+          "IKEDC",
+          "EKEDC",
+          "AEDC",
+          "KEDCO",
+          "JED",
+          "IBEDC",
+          "PHED",
+          "EEDC",
+          "BEDC"
         ]
       },
       {
         name: "meterType",
         label: "Meter Type",
         type: "select",
-        required: true,
-        options: [
-          ["", "Select Meter Type"],
-          ["Prepaid", "Prepaid"],
-          ["Postpaid", "Postpaid"]
-        ]
+        options: ["Prepaid", "Postpaid"]
       },
       {
-        name: "meter",
+        name: "meterNumber",
         label: "Meter Number",
         type: "text",
-        placeholder: "Enter meter number",
-        required: true
+        placeholder: "Enter meter number"
       },
       {
         name: "amount",
         label: "Amount (₦)",
         type: "number",
-        placeholder: "Enter amount",
-        min: 1,
-        required: true
+        placeholder: "Enter amount"
       }
     ]
   },
 
-  tv: {
-    title: "Pay TV",
-    description: "Renew your TV subscription",
-    icon: "fa-tv",
+  cable: {
+    title: "TV Subscription",
+    description: "Manage your supported TV subscription.",
     fields: [
       {
         name: "provider",
         label: "TV Provider",
         type: "select",
-        required: true,
-        options: [
-          ["", "Select Provider"],
-          ["DStv", "DStv"],
-          ["GOtv", "GOtv"],
-          ["StarTimes", "StarTimes"]
-        ]
+        options: ["DStv", "GOtv", "StarTimes"]
       },
       {
         name: "smartcard",
         label: "Smartcard / IUC Number",
         type: "text",
-        placeholder: "Enter decoder number",
-        required: true
+        placeholder: "Enter decoder number"
       },
       {
         name: "plan",
         label: "Subscription Plan",
         type: "text",
-        placeholder: "Enter plan name",
-        required: true
-      },
-      {
-        name: "amount",
-        label: "Amount (₦)",
-        type: "number",
-        placeholder: "Enter amount",
-        min: 1,
-        required: true
+        placeholder: "Enter or select plan"
       }
     ]
   },
 
-  waec: {
-    title: "WAEC PIN",
-    description: "Purchase a WAEC examination PIN",
-    icon: "fa-graduation-cap",
+  education: {
+    title: "Education PINs",
+    description: "Education examination PIN services.",
     fields: [
+      {
+        name: "exam",
+        label: "Examination",
+        type: "select",
+        options: ["WAEC", "NECO", "JAMB"]
+      },
       {
         name: "quantity",
         label: "Quantity",
         type: "number",
-        placeholder: "Number of PINs",
-        min: 1,
-        required: true
-      },
-      {
-        name: "amount",
-        label: "Total Amount (₦)",
-        type: "number",
-        placeholder: "Enter total price",
-        min: 1,
-        required: true
-      }
-    ]
-  },
-
-  neco: {
-    title: "NECO PIN",
-    description: "Purchase a NECO examination PIN",
-    icon: "fa-book-open",
-    fields: [
-      {
-        name: "quantity",
-        label: "Quantity",
-        type: "number",
-        placeholder: "Number of PINs",
-        min: 1,
-        required: true
-      },
-      {
-        name: "amount",
-        label: "Total Amount (₦)",
-        type: "number",
-        placeholder: "Enter total price",
-        min: 1,
-        required: true
-      }
-    ]
-  },
-
-  jamb: {
-    title: "JAMB PIN",
-    description: "Purchase a JAMB registration PIN",
-    icon: "fa-school",
-    fields: [
-      {
-        name: "quantity",
-        label: "Quantity",
-        type: "number",
-        placeholder: "Number of PINs",
-        min: 1,
-        required: true
-      },
-      {
-        name: "amount",
-        label: "Total Amount (₦)",
-        type: "number",
-        placeholder: "Enter total price",
-        min: 1,
-        required: true
+        placeholder: "Enter quantity"
       }
     ]
   },
 
   internet: {
     title: "Internet Subscription",
-    description: "Pay for an internet service",
-    icon: "fa-globe",
+    description: "Internet subscription services.",
     fields: [
       {
         name: "provider",
         label: "Internet Provider",
-        type: "select",
-        required: true,
-        options: [
-          ["", "Select Provider"],
-          ["Spectranet", "Spectranet"],
-          ["Smile", "Smile"],
-          ["Fiber Internet", "Fiber Internet"],
-          ["Other", "Other"]
-        ]
+        type: "text",
+        placeholder: "Enter provider"
       },
       {
         name: "account",
-        label: "Account Number",
+        label: "Account / Customer Number",
         type: "text",
-        placeholder: "Enter account number",
-        required: true
+        placeholder: "Enter account number"
       },
       {
-        name: "amount",
-        label: "Amount (₦)",
-        type: "number",
-        placeholder: "Enter amount",
-        min: 1,
-        required: true
+        name: "plan",
+        label: "Subscription Plan",
+        type: "text",
+        placeholder: "Enter plan"
       }
     ]
   },
 
   sms: {
     title: "Bulk SMS",
-    description: "Prepare an SMS campaign",
-    icon: "fa-comment-sms",
+    description: "Prepare a bulk messaging request.",
     fields: [
       {
-        name: "phone",
-        label: "Recipient Phone Number(s)",
+        name: "sender",
+        label: "Sender Name",
         type: "text",
-        placeholder: "08012345678",
-        required: true
+        placeholder: "Your sender name"
+      },
+      {
+        name: "recipients",
+        label: "Recipient Numbers",
+        type: "textarea",
+        placeholder: "Enter numbers separated by commas"
       },
       {
         name: "message",
         label: "Message",
         type: "textarea",
-        placeholder: "Type your message",
-        required: true
-      },
-      {
-        name: "amount",
-        label: "Estimated Amount (₦)",
-        type: "number",
-        placeholder: "Enter amount",
-        min: 1,
-        required: true
+        placeholder: "Write your message"
       }
     ]
   },
 
-  giftcards: {
+  giftcard: {
     title: "Gift Cards",
-    description: "Purchase digital gift cards",
-    icon: "fa-gift",
+    description: "Gift card services subject to provider availability.",
     fields: [
       {
-        name: "provider",
-        label: "Gift Card",
-        type: "select",
-        required: true,
-        options: [
-          ["", "Select Gift Card"],
-          ["Apple", "Apple"],
-          ["Google Play", "Google Play"],
-          ["Steam", "Steam"],
-          ["Other", "Other"]
-        ]
+        name: "card",
+        label: "Gift Card Type",
+        type: "text",
+        placeholder: "Enter gift card type"
       },
       {
         name: "amount",
-        label: "Amount (₦)",
+        label: "Card Value",
         type: "number",
-        placeholder: "Enter amount",
-        min: 1,
-        required: true
+        placeholder: "Enter value"
       }
     ]
   },
 
-  vouchers: {
-    title: "Digital Vouchers",
-    description: "Purchase a digital voucher",
-    icon: "fa-ticket",
+  voucher: {
+    title: "Vouchers",
+    description: "Voucher purchase requests.",
     fields: [
       {
         name: "voucher",
         label: "Voucher Type",
         type: "text",
-        placeholder: "Enter voucher type",
-        required: true
+        placeholder: "Enter voucher type"
       },
       {
-        name: "amount",
-        label: "Amount (₦)",
+        name: "quantity",
+        label: "Quantity",
         type: "number",
-        placeholder: "Enter amount",
-        min: 1,
-        required: true
+        placeholder: "Enter quantity"
       }
     ]
   },
 
   schoolfees: {
     title: "School Fees",
-    description: "Prepare a school fee payment",
-    icon: "fa-building-columns",
+    description: "School fee payment requests.",
     fields: [
       {
         name: "school",
         label: "School Name",
         type: "text",
-        placeholder: "Enter school name",
-        required: true
+        placeholder: "Enter school name"
       },
       {
         name: "student",
-        label: "Student Registration Number",
+        label: "Student Reference",
         type: "text",
-        placeholder: "Enter registration number",
-        required: true
+        placeholder: "Enter student reference"
       },
       {
         name: "amount",
         label: "Amount (₦)",
         type: "number",
-        placeholder: "Enter amount",
-        min: 1,
-        required: true
+        placeholder: "Enter amount"
       }
     ]
   }
 };
 
-// ==========================================
-// SAFE STORAGE
-// ==========================================
 
-function readStorage(key, fallback) {
-  try {
-    const value = localStorage.getItem(key);
-    return value === null ? fallback : JSON.parse(value);
-  } catch (error) {
-    return fallback;
-  }
-}
+/* =====================================================
+   18. SERVICE FORM BUILDER
+   ===================================================== */
 
-function saveStorage(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.warn("Local storage is unavailable.");
-  }
-}
-
-function loadDemoData() {
-  const savedBalance = readStorage("zentra_demo_balance", null);
-  const savedTransactions = readStorage("zentra_demo_transactions", []);
-
-  if (
-    typeof savedBalance === "number" &&
-    Number.isFinite(savedBalance) &&
-    savedBalance >= 0
-  ) {
-    walletBalance = savedBalance;
-  }
-
-  transactions = Array.isArray(savedTransactions)
-    ? savedTransactions.slice(0, 100)
-    : [];
-}
-
-function saveDemoData() {
-  saveStorage("zentra_demo_balance", walletBalance);
-  saveStorage("zentra_demo_transactions", transactions);
-}
-
-// ==========================================
-// CURRENCY FORMATTING
-// ==========================================
-
-function formatMoney(amount) {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(amount);
-}
-
-// ==========================================
-// NAVIGATION
-// ==========================================
-
-function navigate(page) {
-  const pageMap = {
-    home: "homePage",
-    service: "servicePage",
-    fund: "fundPage",
-    history: "historyPage",
-    notifications: "notificationsPage",
-    profile: "profilePage"
-  };
-
-  const targetId = pageMap[page];
-
-  if (!targetId || !$(targetId)) {
-    return;
-  }
-
-  document.querySelectorAll(".page").forEach((section) => {
-    section.classList.remove("active");
-  });
-
-  $(targetId).classList.add("active");
-
-  currentPage = page;
-
-  document.querySelectorAll(".nav-item").forEach((button) => {
-    button.classList.remove("active");
-  });
-
-  const navIndex = {
-    home: 0,
-    history: 1,
-    fund: 2,
-    notifications: 3,
-    profile: 4
-  };
-
-  if (Object.prototype.hasOwnProperty.call(navIndex, page)) {
-    const navButtons = document.querySelectorAll(".nav-item");
-    navButtons[navIndex[page]].classList.add("active");
-  }
-
-  if (page === "history") {
-    renderTransactions();
-  }
-
-  if (page === "home") {
-    renderRecentTransactions();
-  }
-
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
-}
-
-// ==========================================
-// WALLET BALANCE
-// ==========================================
-
-function updateBalance() {
-  const balanceElement = $("walletBalance");
-
-  if (!balanceElement) {
-    return;
-  }
-
-  balanceElement.textContent = balanceVisible
-    ? formatMoney(walletBalance)
-    : "₦••••••";
-
-  const toggleButton = $("balanceToggle");
-
-  if (toggleButton) {
-    toggleButton.innerHTML = balanceVisible
-      ? '<i class="fa-regular fa-eye"></i>'
-      : '<i class="fa-regular fa-eye-slash"></i>';
-
-    toggleButton.setAttribute(
-      "aria-label",
-      balanceVisible ? "Hide balance" : "Show balance"
-    );
-  }
-}
-
-function toggleBalance() {
-  balanceVisible = !balanceVisible;
-  updateBalance();
-}
-
-// ==========================================
-// OPEN SERVICE
-// ==========================================
-
-function openService(serviceName) {
-  const config = serviceConfig[serviceName];
+function openService(serviceKey) {
+  const config = serviceConfig[serviceKey];
 
   if (!config) {
-    showModal(
-      "Service unavailable",
-      "This service is not configured yet.",
-      "fa-circle-exclamation"
-    );
+    showMessage("This service is not available.", "error");
     return;
   }
 
-  currentService = serviceName;
+  currentService = serviceKey;
 
   $("serviceTitle").textContent = config.title;
   $("serviceDescription").textContent = config.description;
 
-  $("serviceFormIcon").innerHTML =
-    `<i class="fa-solid ${config.icon}"></i>`;
+  const fieldsContainer = $("serviceFields");
+  fieldsContainer.innerHTML = "";
 
-  $("dynamicFields").innerHTML = "";
-
-  config.fields.forEach((field) => {
+  config.fields.forEach(field => {
     const label = document.createElement("label");
-    label.htmlFor = `field_${field.name}`;
     label.textContent = field.label;
+    label.htmlFor = "service_" + field.name;
 
     let input;
 
     if (field.type === "select") {
       input = document.createElement("select");
 
-      field.options.forEach(([value, text]) => {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = text;
-        input.appendChild(option);
+      field.options.forEach(option => {
+        const item = document.createElement("option");
+        item.value = option;
+        item.textContent = option;
+        input.appendChild(item);
       });
+
     } else if (field.type === "textarea") {
       input = document.createElement("textarea");
-      input.rows = 4;
-      input.style.resize = "vertical";
+      input.rows = 3;
+
     } else {
       input = document.createElement("input");
       input.type = field.type;
-
-      if (field.placeholder) {
-        input.placeholder = field.placeholder;
-      }
-
-      if (field.min !== undefined) {
-        input.min = String(field.min);
-      }
-
-      if (field.type === "number") {
-        input.step = "any";
-      }
     }
 
-    input.id = `field_${field.name}`;
+    input.id = "service_" + field.name;
     input.name = field.name;
-    input.required = Boolean(field.required);
+    input.placeholder = field.placeholder || "";
+    input.required = true;
 
-    $("dynamicFields").appendChild(label);
-    $("dynamicFields").appendChild(input);
+    if (field.type === "number") {
+      input.min = "1";
+    }
+
+    fieldsContainer.appendChild(label);
+    fieldsContainer.appendChild(input);
   });
 
-  $("serviceAmount").textContent = formatMoney(0);
+  $("serviceSubmit").textContent = "Continue";
 
-  navigate("service");
+  navigateTo("service");
 }
 
-// ==========================================
-// READ FORM DATA
-// ==========================================
-
-function getFormValues(form) {
-  const values = {};
-
-  new FormData(form).forEach((value, key) => {
-    values[key] = String(value).trim();
+document.querySelectorAll("[data-service]").forEach(button => {
+  button.addEventListener("click", () => {
+    openService(button.dataset.service);
   });
+});
 
-  return values;
-}
 
-function validPhone(phone) {
-  return /^(?:\+?234|0)[789]\d{9}$/.test(phone.replace(/\s+/g, ""));
-}
+/* =====================================================
+   19. SERVICE SUBMISSION
+   ===================================================== */
 
-// ==========================================
-// SERVICE FORM SUBMISSION
-// ==========================================
-
-function handleServiceSubmit(event) {
+$("serviceForm").addEventListener("submit", async (event) => {
   event.preventDefault();
+
+  if (!currentUser) {
+    showMessage("Please sign in first.", "error");
+    return;
+  }
 
   const config = serviceConfig[currentService];
 
-  if (!config) {
-    showModal("Error", "Please select a service again.");
-    return;
-  }
+  if (!config) return;
 
-  const form = event.currentTarget;
+  const details = {};
 
-  if (!form.reportValidity()) {
-    return;
-  }
+  config.fields.forEach(field => {
+    const element = $("service_" + field.name);
+    details[field.name] = element.value.trim();
+  });
 
-  const values = getFormValues(form);
+  const amount = Number(details.amount || 0);
 
-  if (values.phone && !validPhone(values.phone)) {
-    showModal(
-      "Invalid phone number",
-      "Please enter a valid Nigerian phone number.",
-      "fa-phone"
-    );
-    return;
-  }
-
-  const amount = Number(values.amount);
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    showModal(
-      "Invalid amount",
-      "Please enter a valid amount greater than zero.",
-      "fa-circle-exclamation"
-    );
-    return;
-  }
-
-  if (amount > walletBalance) {
-    showModal(
-      "Insufficient balance",
-      `Your demo wallet balance is ${formatMoney(walletBalance)}.\n\nThis demo cannot process a real payment.`,
-      "fa-wallet"
-    );
+  if (amount < 0 || !Number.isFinite(amount)) {
+    showMessage("Please enter a valid amount.", "error");
     return;
   }
 
   showModal(
-    "Demo mode",
-    `${config.title}\n\nAmount: ${formatMoney(amount)}\n\nNo money has been deducted. Real transactions require a verified service API and secure backend.`,
-    "fa-shield-halved"
+    "Service Request Prepared",
+    "Your " + config.title +
+    " details have been collected. Live purchases will be enabled after the secure VTUGATE backend is connected. No payment has been made."
   );
-}
+});
 
-// ==========================================
-// FUND WALLET
-// ==========================================
 
-function handleFundSubmit(event) {
+/* =====================================================
+   20. FUND WALLET
+   ===================================================== */
+
+$("fundWalletForm").addEventListener("submit", (event) => {
   event.preventDefault();
 
-  const form = event.currentTarget;
-
-  if (!form.reportValidity()) {
-    return;
-  }
-
   const amount = Number($("fundAmount").value);
-  const method = $("fundMethod").value;
 
   if (!Number.isFinite(amount) || amount < 100) {
-    showModal(
-      "Invalid amount",
-      "Please enter at least ₦100.",
-      "fa-circle-exclamation"
-    );
+    showMessage("Minimum funding amount is ₦100.", "error");
     return;
   }
 
-  if (!method) {
-    showModal(
-      "Select payment method",
-      "Please select a payment method.",
-      "fa-credit-card"
-    );
-    return;
-  }
+  const method = document.querySelector(
+    'input[name="paymentMethod"]:checked'
+  )?.value;
 
   showModal(
-    "Payment setup required",
-    `Amount: ${formatMoney(amount)}\nMethod: ${method}\n\nThis is a demo interface. No payment has been initiated and no money has been received.\n\nTo enable real funding, the merchant payment service must be integrated through a secure backend.`,
-    "fa-lock"
+    "Wallet Funding",
+    "Funding request for " + formatMoney(amount) +
+    " using " + (method || "selected payment method") +
+    ". Secure payment processing will be enabled after OPay/payment backend configuration. Your wallet has not been credited."
   );
-}
+});
 
-// ==========================================
-// TRANSACTION HISTORY
-// ==========================================
 
-function createTransactionElement(transaction) {
-  const item = document.createElement("div");
-  item.className = "transaction-item";
+/* =====================================================
+   21. TRANSACTION HISTORY
+   ===================================================== */
 
-  const icon = document.createElement("div");
-  icon.className = "transaction-icon";
-
-  const iconElement = document.createElement("i");
-  iconElement.className = "fa-solid fa-receipt";
-  icon.appendChild(iconElement);
-
-  const info = document.createElement("div");
-  info.className = "transaction-info";
-
-  const title = document.createElement("strong");
-  title.textContent = transaction.title || "Transaction";
-
-  const date = document.createElement("small");
-  date.textContent = transaction.date || "";
-
-  info.appendChild(title);
-  info.appendChild(date);
-
-  const right = document.createElement("div");
-
-  const amount = document.createElement("div");
-  amount.className = "transaction-amount";
-  amount.textContent = formatMoney(Number(transaction.amount) || 0);
-
-  const status = document.createElement("small");
-  status.className = "transaction-status";
-  status.textContent = transaction.status || "Demo";
-
-  right.appendChild(amount);
-  right.appendChild(status);
-
-  item.appendChild(icon);
-  item.appendChild(info);
-  item.appendChild(right);
-
-  return item;
-}
-
-function renderTransactionList(containerId, list) {
-  const container = $(containerId);
-
-  if (!container) {
-    return;
+function listenToTransactions(uid) {
+  if (unsubscribeTransactions) {
+    unsubscribeTransactions();
   }
 
-  container.replaceChildren();
-
-  if (!list.length) {
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-
-    const icon = document.createElement("i");
-    icon.className = "fa-solid fa-receipt";
-
-    const message = document.createElement("p");
-    message.textContent = "No transactions found";
-
-    const detail = document.createElement("small");
-    detail.textContent = "Your transaction records will appear here.";
-
-    empty.appendChild(icon);
-    empty.appendChild(message);
-    empty.appendChild(detail);
-
-    container.appendChild(empty);
-    return;
-  }
-
-  list.forEach((transaction) => {
-    container.appendChild(createTransactionElement(transaction));
-  });
-}
-
-function renderTransactions() {
-  renderTransactionList("allTransactions", transactions);
-}
-
-function renderRecentTransactions() {
-  renderTransactionList(
-    "recentTransactions",
-    transactions.slice(0, 4)
-  );
-}
-
-// ==========================================
-// MODAL
-// ==========================================
-
-function showModal(
-  title,
-  message,
-  icon = "fa-circle-info"
-) {
-  $("modalTitle").textContent = title;
-  $("modalMessage").textContent = message;
-
-  $("modalIcon").innerHTML =
-    `<i class="fa-solid ${icon}"></i>`;
-
-  $("appModal").classList.add("show");
-  $("appModal").setAttribute("aria-hidden", "false");
-}
-
-function closeModal() {
-  $("appModal").classList.remove("show");
-  $("appModal").setAttribute("aria-hidden", "true");
-}
-
-// ==========================================
-// NOTIFICATIONS
-// ==========================================
-
-function showNotifications() {
-  navigate("notifications");
-}
-
-// ==========================================
-// PROFILE
-// ==========================================
-
-function editProfile() {
-  const currentName = $("userName").textContent;
-
-  const newName = window.prompt(
-    "Enter your display name:",
-    currentName === "ZENTRA USER" ? "" : currentName
+  const transactionsRef = collection(
+    db,
+    "users",
+    uid,
+    "transactions"
   );
 
-  if (newName === null) {
-    return;
-  }
-
-  const cleanName = newName.trim();
-
-  if (!cleanName) {
-    showModal(
-      "Name required",
-      "Please enter a valid display name."
-    );
-    return;
-  }
-
-  if (cleanName.length > 50) {
-    showModal(
-      "Name too long",
-      "Please use no more than 50 characters."
-    );
-    return;
-  }
-
-  $("userName").textContent = cleanName.toUpperCase();
-  $("profileName").textContent = cleanName.toUpperCase();
-
-  saveStorage("zentra_demo_name", cleanName);
-
-  showModal(
-    "Profile updated",
-    "Your display name has been updated on this device.",
-    "fa-user-check"
-  );
-}
-
-function showSupport() {
-  showModal(
-    "Customer Support",
-    "Welcome to ZENTRA PAY Support.\n\nCustomer support contact details have not been configured yet.",
-    "fa-headset"
-  );
-}
-
-function showAbout() {
-  showModal(
-    "About ZENTRA PAY",
-    "ZENTRA PAY\n\nYour digital payment platform concept.\n\nVersion 1.0 — Demo\n\nBlack. White. Zebra.",
-    "fa-circle-info"
-  );
-}
-
-// ==========================================
-// INITIALIZE APPLICATION
-// ==========================================
-
-function initializeApp() {
-  loadDemoData();
-
-  const savedName = readStorage("zentra_demo_name", "");
-
-  if (typeof savedName === "string" && savedName.trim()) {
-    $("userName").textContent = savedName.toUpperCase();
-    $("profileName").textContent = savedName.toUpperCase();
-  }
-
-  updateBalance();
-  renderRecentTransactions();
-  renderTransactions();
-
-  // Service form
-  $("serviceForm").addEventListener(
-    "submit",
-    handleServiceSubmit
+  const transactionQuery = query(
+    transactionsRef,
+    orderBy("createdAt", "desc"),
+    limit(30)
   );
 
-  // Wallet funding form
-  $("fundForm").addEventListener(
-    "submit",
-    handleFundSubmit
-  );
-
-  // Update displayed amount when a service amount changes.
-  $("dynamicFields").addEventListener("input", (event) => {
-    if (event.target.name === "amount") {
-      const amount = Number(event.target.value);
-
-      $("serviceAmount").textContent =
-        Number.isFinite(amount) && amount >= 0
-          ? formatMoney(amount)
-          : formatMoney(0);
+  unsubscribeTransactions = onSnapshot(
+    transactionQuery,
+    (snapshot) => {
+      renderTransactions(snapshot.docs.map(item => ({
+        id: item.id,
+        ...item.data()
+      })));
+    },
+    (error) => {
+      console.error("Transaction listener:", error);
+      $("transactionList").innerHTML =
+        '<div class="empty-state"><strong>Unable to load transactions</strong><p>Please try again later.</p></div>';
     }
-  });
-
-  // Close modal when tapping outside its content.
-  $("appModal").addEventListener("click", (event) => {
-    if (event.target === $("appModal")) {
-      closeModal();
-    }
-  });
-
-  // Escape key closes modal.
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      closeModal();
-    }
-  });
-
-  // Hide splash screen.
-  window.setTimeout(() => {
-    $("splashScreen").classList.add("hide");
-  }, 1000);
-
-  console.log(`${APP_NAME} demo initialized successfully.`);
+  );
 }
 
-document.addEventListener("DOMContentLoaded", initializeApp);
+
+function renderTransactions(items) {
+  const container = $("transactionList");
+
+  if (!items.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <span>↔</span>
+        <strong>No transactions found</strong>
+        <p>Your payment records will appear here.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = "";
+
+  items.forEach(item => {
+    const row = document.createElement("div");
+    row.style.cssText =
+      "display:flex;justify-content:space-between;gap:12px;padding:17px;border-bottom:1px solid #eee;align-items:center;";
+
+    const left = document.createElement("div");
+
+    const title = document.createElement("strong");
+    title.textContent = item.description || item.service || "Transaction";
+    title.style.cssText = "display:block;font-size:12px;";
+
+    const date = document.createElement("small");
+    date.textContent = item.createdAt?.toDate
+      ? item.createdAt.toDate().toLocaleString()
+      : "Date unavailable";
+    date.style.cssText = "display:block;color:#999;font-size:10px;margin-top:6px;";
+
+    left.append(title, date);
+
+    const right = document.createElement("div");
+    right.style.textAlign = "right";
+
+    const amount = document.createElement("strong");
+    amount.textContent = formatMoney(Number(item.amount || 0));
+    amount.style.cssText = "display:block;font-size:12px;";
+
+    const status = document.createElement("small");
+    status.textContent = item.status || "pending";
+    status.style.cssText = "display:block;color:#888;font-size:10px;margin-top:6px;";
+
+    right.append(amount, status);
+    row.append(left, right);
+
+    container.appendChild(row);
+  });
+}
+
+
+/* =====================================================
+   22. TRANSACTION SEARCH AND FILTER
+   ===================================================== */
+
+$("transactionSearch").addEventListener("input", () => {
+  filterTransactions();
+});
+
+$("transactionFilter").addEventListener("change", () => {
+  filterTransactions();
+});
+
+let cachedTransactions = [];
+
+function filterTransactions() {
+  const search = $("transactionSearch").value.toLowerCase();
+  const filter = $("transactionFilter").value;
+
+  const filtered = cachedTransactions.filter(item => {
+    const title = (
+      item.description || item.service || ""
+    ).toLowerCase();
+
+    const matchesSearch = title.includes(search);
+    const matchesStatus =
+      filter === "all" ||
+      String(item.status || "").toLowerCase() === filter;
+
+    return matchesSearch && matchesStatus;
+  });
+
+  renderTransactions(filtered);
+}
+
+
+/* =====================================================
+   23. SAVE PROFILE
+   ===================================================== */
+
+$("profileForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!currentUser) return;
+
+  const name = $("profileName").value.trim();
+  const phone = $("profilePhone").value.trim();
+  const address = $("profileAddress").value.trim();
+
+  if (!name || !phone) {
+    showMessage("Name and phone number are required.", "error");
+    return;
+  }
+
+  try {
+    await updateDoc(doc(db, "users", currentUser.uid), {
+      fullName: name,
+      phone: phone,
+      address: address,
+      updatedAt: serverTimestamp()
+    });
+
+    showMessage("Profile updated successfully.");
+
+  } catch (error) {
+    console.error("Profile update:", error);
+    showMessage("Unable to update profile.", "error");
+  }
+});
+
+
+/* =====================================================
+   24. CHANGE PASSWORD
+   ===================================================== */
+
+$("changePasswordButton").addEventListener("click", async () => {
+  if (!currentUser) return;
+
+  const newPassword = prompt(
+    "Enter your new password (at least 8 characters):"
+  );
+
+  if (!newPassword) return;
+
+  if (newPassword.length < 8) {
+    showMessage("Password must contain at least 8 characters.", "error");
+    return;
+  }
+
+  try {
+    await updatePassword(currentUser, newPassword);
+    showMessage("Password updated successfully.");
+
+  } catch (error) {
+    console.error("Password update:", error);
+
+    showMessage(
+      "Please sign in again before changing your password.",
+      "error"
+    );
+  }
+});
+
+
+/* =====================================================
+   25. SUPPORT REQUEST
+   ===================================================== */
+
+$("supportForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  if (!currentUser) return;
+
+  const subject = $("supportSubject").value.trim();
+  const message = $("supportMessage").value.trim();
+
+  if (!subject || !message) {
+    showMessage("Please complete the support form.", "error");
+    return;
+  }
+
+  try {
+    await addDoc(collection(db, "supportTickets"), {
+      uid: currentUser.uid,
+      email: currentUser.email || "",
+      subject,
+      message,
+      status: "open",
+      createdAt: serverTimestamp()
+    });
+
+    $("supportForm").reset();
+
+    showMessage("Your support request has been submitted.");
+
+  } catch (error) {
+    console.error("Support request:", error);
+    showMessage("Unable to submit your request.", "error");
+  }
+});
+
+
+/* =====================================================
+   26. MODAL SYSTEM
+   ===================================================== */
+
+function showModal(title, message) {
+  $("modalContent").innerHTML = "";
+
+  const heading = document.createElement("h2");
+  heading.textContent = title;
+  heading.style.cssText = "font-size:19px;margin-bottom:12px;";
+
+  const paragraph = document.createElement("p");
+  paragraph.textContent = message;
+  paragraph.style.cssText =
+    "font-size:12px;line-height:1.8;color:#777;";
+
+  $("modalContent").append(heading, paragraph);
+
+  $("appModal").classList.remove("hidden");
+}
+
+$("closeModal").addEventListener("click", () => {
+  $("appModal").classList.add("hidden");
+});
+
+$("appModal").addEventListener("click", (event) => {
+  if (event.target === $("appModal")) {
+    $("appModal").classList.add("hidden");
+  }
+});
+
+
+/* =====================================================
+   27. LOGOUT
+   ===================================================== */
+
+$("logoutButton").addEventListener("click", async () => {
+  const confirmed = confirm("Are you sure you want to sign out?");
+
+  if (!confirmed) return;
+
+  try {
+    await signOut(auth);
+    showMessage("You have signed out.");
+
+  } catch (error) {
+    console.error(error);
+    showMessage("Unable to sign out.", "error");
+  }
+});
+
+
+/* =====================================================
+   28. NOTIFICATIONS BUTTON
+   ===================================================== */
+
+$("notificationButton").addEventListener("click", () => {
+  showModal(
+    "Notifications",
+    "Your account notifications will appear here."
+  );
+});
+
+
+/* =====================================================
+   29. CURRENT YEAR
+   ===================================================== */
+
+$("currentYear").textContent = new Date().getFullYear();
+
+
+/* =====================================================
+   30. INITIAL PAGE
+   ===================================================== */
+
+navigateTo("dashboard");
+
+setTimeout(() => {
+  hideLoading();
+}, 7000);
