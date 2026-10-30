@@ -4,10 +4,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // =========================================
-    // AUTHENTICATION HELPERS
-    // =========================================
-
     function signedIn() {
       return request.auth != null;
     }
@@ -17,136 +13,75 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return signedIn()
-        && exists(
-          /databases/$(database)/documents/users/$(request.auth.uid)
-        )
-        && get(
-          /databases/$(database)/documents/users/$(request.auth.uid)
-        ).data.role == "admin";
+      return signedIn() &&
+        request.auth.token.role in ['admin', 'superAdmin'];
     }
 
-    function validText(value, maxLength) {
-      return value is string && value.size() <= maxLength;
-    }
-
-    // =========================================
     // USER PROFILES
-    // =========================================
-
     match /users/{uid} {
-
       allow create: if isOwner(uid)
-        && request.resource.data.uid == uid
-        && request.resource.data.role == "user"
+        && request.resource.data.role == 'user'
         && request.resource.data.walletBalance == 0
-        && request.resource.data.kycStatus == "pending"
-        && request.resource.data.accountStatus == "active"
-        && request.resource.data.keys().hasOnly([
-          "uid",
-          "fullName",
-          "phone",
-          "email",
-          "role",
-          "accountStatus",
-          "kycStatus",
-          "walletBalance",
-          "currency",
-          "createdAt",
-          "updatedAt"
-        ]);
+        && request.resource.data.status == 'active';
 
-      // User can read their own profile.
-      // Admin can read all profiles.
       allow read: if isOwner(uid) || isAdmin();
 
-      // User can update only basic profile fields.
       allow update: if isOwner(uid)
         && request.resource.data.diff(resource.data)
           .affectedKeys()
           .hasOnly([
-            "fullName",
-            "phone",
-            "address",
-            "updatedAt"
-          ])
-        && validText(request.resource.data.fullName, 100)
-        && validText(request.resource.data.phone, 25)
-        && validText(request.resource.data.address, 300);
+            'fullName',
+            'phone',
+            'address',
+            'updatedAt'
+          ]);
 
-      // Only trusted backend should delete accounts.
       allow delete: if false;
 
-      // =======================================
-      // USER TRANSACTIONS
-      // =======================================
-
+      // CUSTOMER TRANSACTIONS
       match /transactions/{transactionId} {
-
-        // Users can view their own transactions.
         allow read: if isOwner(uid) || isAdmin();
-
-        // No direct transaction creation or editing
-        // from the public frontend.
-        // Cloud Functions will create transactions
-        // using Firebase Admin SDK.
         allow create, update, delete: if false;
       }
     }
 
-    // =========================================
-    // SUPPORT TICKETS
-    // =========================================
-
-    match /supportTickets/{ticketId} {
-
-      allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.status == "open"
-        && validText(request.resource.data.subject, 150)
-        && validText(request.resource.data.message, 3000)
-        && request.resource.data.keys().hasOnly([
-          "uid",
-          "email",
-          "subject",
-          "message",
-          "status",
-          "createdAt"
-        ]);
-
+    // WALLET FUNDING
+    match /walletFunding/{fundingId} {
       allow read: if signedIn()
-        && (
-          resource.data.uid == request.auth.uid
-          || isAdmin()
-        );
-
-      // Support status updates must be handled
-      // through a trusted backend.
-      allow update, delete: if false;
+        && resource.data.uid == request.auth.uid;
+      allow write: if false;
     }
 
-    // =========================================
-    // PUBLIC SERVICE CONFIGURATION
-    // =========================================
+    // PAYMENT CREDIT LEDGER
+    match /opayCredits/{reference} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
 
+    // SUPPORT TICKETS
+    match /supportTickets/{ticketId} {
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid;
+
+      allow read: if isAdmin()
+        || (signedIn()
+        && resource.data.uid == request.auth.uid);
+
+      allow update, delete: if isAdmin();
+    }
+
+    // PUBLIC SERVICES
     match /publicServices/{serviceId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // =========================================
-    // ADMIN CONFIGURATION
-    // =========================================
-
+    // ADMIN SETTINGS
     match /adminSettings/{settingId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
-    // =========================================
-    // DENY EVERYTHING ELSE
-    // =========================================
-
+    // DEFAULT DENY
     match /{document=**} {
       allow read, write: if false;
     }
